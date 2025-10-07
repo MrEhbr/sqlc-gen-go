@@ -7,7 +7,7 @@ const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
 
 {{if $.EmitParamsStructs}}
 type {{.MethodName}}Params struct { {{- range .Params}}
-	{{.Name}} {{.Type}} {{if $.EmitJsonTags}}{{$.Q}}json:"{{.JSONTag}}"{{$.Q}}{{end}}
+	{{.Name}} {{.Type}} {{if $.EmitJsonTags}}{{$.Q}}json:"{{.JSONTag}}"{{$.Q}}{{end -}}
 	{{- end}}
 }
 {{end}}
@@ -15,11 +15,13 @@ type {{.MethodName}}Params struct { {{- range .Params}}
 type {{.MethodName}}Query struct {
 	ex     QueryExecutor
 	{{- if .Arg.EmitStruct}}
-	arg    {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	arg    {{.Arg.DefineType}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
 	{{- end}}
-	result {{.Ret.Type}}
+	{{- end}}
+	result {{.Ret.DefineType}}
 }
 
 func (q *{{.MethodName}}Query) SQL() string {
@@ -53,7 +55,7 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.
 	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
 		{{- range .Params}}
 		{{.Name}}: {{.Name}},
-		{{- end}}
+		{{- end }}
 	}{{else}}{{.Arg.Name}}{{end}}
 	q.{{.Arg.Name}} = {{.Arg.Name}}
 	{{- end}}
@@ -86,8 +88,10 @@ type {{.MethodName}}Query struct {
 	ex      QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg     {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	results []{{.Ret.Type}}
 }
@@ -163,8 +167,10 @@ type {{.MethodName}}Query struct {
 	ex           QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	rowsAffected int64
 }
@@ -221,8 +227,10 @@ type {{.MethodName}}Query struct {
 	ex           QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	rowsAffected int64
 }
@@ -282,8 +290,10 @@ type {{.MethodName}}Query struct {
 	ex           QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	lastInsertID int64
 	rowsAffected int64
@@ -353,8 +363,10 @@ type {{.MethodName}}Query struct {
 	ex     QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg    {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	result {{.MethodName}}Result
 }

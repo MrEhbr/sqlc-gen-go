@@ -29,11 +29,13 @@ type {{.Ret.Type}} struct { {{- range .Ret.Struct.Fields}}
 type {{.MethodName}}Query struct {
 	ex     {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
-	arg    {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	arg    {{.Arg.DefineType}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
 	{{- end}}
-	result {{.Ret.Type}}
+	{{- end}}
+	result {{.Ret.DefineType}}
 }
 
 func (q *{{.MethodName}}Query) SQL() string {
@@ -46,7 +48,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.Struct.Fields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -58,11 +60,7 @@ func (q *{{.MethodName}}Query) Scan(row pgx.Row) error {
 }
 
 func (q *{{.MethodName}}Query) Result() {{.Ret.DefineType}} {
-	{{- if .Ret.IsPointer}}
-	return &q.result
-	{{- else}}
 	return q.result
-	{{- end}}
 }
 
 {{- if .Arg.Pair}}
@@ -70,7 +68,9 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) ({{.Ret.
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	if err := q.ex.Execute(ctx, q); err != nil {
 		{{- if .Ret.IsPointer}}
@@ -107,11 +107,13 @@ func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodN
 type {{.MethodName}}Query struct {
 	ex      {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
-	arg     {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	arg     {{.Arg.DefineType}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
 	{{- end}}
-	results []{{.Ret.Type}}
+	{{- end}}
+	results []{{.Ret.DefineType}}
 }
 
 func (q *{{.MethodName}}Query) SQL() string {
@@ -124,7 +126,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.Struct.Fields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -142,27 +144,21 @@ func (q *{{.MethodName}}Query) ScanRow(row pgx.Row) error {
 }
 
 func (q *{{.MethodName}}Query) Results() []{{.Ret.DefineType}} {
-	{{- if eq .Ret.Type .Ret.DefineType}}
-	return q.results
-	{{- else}}
-	results := make([]{{.Ret.DefineType}}, len(q.results))
-	for i, r := range q.results {
-		{{- if .Ret.IsPointer}}
-		results[i] = &r
-		{{- else}}
-		results[i] = r
-		{{- end}}
+	{{- if $.EmitEmptySlices}}
+	if q.results == nil {
+		return []{{.Ret.DefineType}}{}
 	}
-	return results
-	{{- end}}
+	{{end -}}
+	return q.results
 }
-
-{{- if .Arg.Pair}}
+{{ if .Arg.Pair}}
 func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) ([]{{.Ret.DefineType}}, error) {
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	q.results = nil
 	if err := q.ex.Execute(ctx, q); err != nil {
@@ -192,8 +188,10 @@ type {{.MethodName}}Query struct {
 	ex           {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	rowsAffected int64
 }
@@ -208,7 +206,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.Struct.Fields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -224,7 +222,9 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) error {
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	return q.ex.Execute(ctx, q)
 }
@@ -245,9 +245,11 @@ func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodN
 type {{.MethodName}}Query struct {
 	ex           {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
-	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	arg          {{.Arg.DefineType}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	rowsAffected int64
 }
@@ -262,7 +264,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.Struct.Fields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -273,12 +275,14 @@ func (q *{{.MethodName}}Query) SetRowsAffected(n int64) {
 	q.rowsAffected = n
 }
 
-{{- if .Arg.Pair}}
+{{ if .Arg.Pair}}
 func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) (int64, error) {
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return 0, err
@@ -305,8 +309,10 @@ func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodN
 type {{.MethodName}}Query struct {
 	{{- if .Arg.EmitStruct}}
 	{{.Arg.Name}} {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 }
 
@@ -320,7 +326,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.Struct.Fields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil

@@ -29,11 +29,13 @@ type {{.Ret.Type}} struct { {{- range .Ret.Struct.Fields}}
 type {{.MethodName}}Query struct {
 	ex     {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
-	arg    {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	arg    {{.Arg.DefineType}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
 	{{- end}}
-	result {{.Ret.Type}}
+	{{- end}}
+	result {{.Ret.DefineType}}
 }
 
 func (q *{{.MethodName}}Query) SQL() string {
@@ -46,7 +48,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -70,7 +72,9 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) ({{.Ret.
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	if err := q.ex.Execute(ctx, q); err != nil {
 		{{- if .Ret.IsPointer}}
@@ -108,8 +112,10 @@ type {{.MethodName}}Query struct {
 	ex      {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg     {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	results []{{.Ret.Type}}
 }
@@ -124,7 +130,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -162,7 +168,9 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) ([]{{.Re
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	q.results = nil
 	if err := q.ex.Execute(ctx, q); err != nil {
@@ -192,8 +200,10 @@ type {{.MethodName}}Query struct {
 	ex           {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	rowsAffected int64
 }
@@ -208,7 +218,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -224,7 +234,9 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) error {
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	return q.ex.Execute(ctx, q)
 }
@@ -246,8 +258,10 @@ type {{.MethodName}}Query struct {
 	ex           {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	rowsAffected int64
 }
@@ -262,7 +276,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -278,7 +292,9 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) (int64, 
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return 0, err
@@ -306,8 +322,10 @@ type {{.MethodName}}Query struct {
 	ex           {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 }
 
@@ -321,7 +339,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -340,8 +358,10 @@ type {{.MethodName}}Query struct {
 	ex           {{$.PackageQualifier}}QueryExecutor
 	{{- if .Arg.EmitStruct}}
 	arg          {{.Arg.Type}}
-	{{- else if .Arg.Pair}}
-	{{.Arg.Pair}}
+	{{- else}}
+	{{- range .Arg.Pairs}}
+	{{.Name}} {{.Type}}
+	{{- end}}
 	{{- end}}
 	lastID       int64
 	rowsAffected int64
@@ -357,7 +377,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 	{{- $argName := .Arg.Name}}
 	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
 	{{- else}}
-	return []any{q.{{.Arg.Name}}}
+	return []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}q.{{$p.Name}}{{end}} }
 	{{- end}}
 	{{- else}}
 	return nil
@@ -377,7 +397,9 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) (int64, 
 	{{- if .Arg.EmitStruct}}
 	q.arg = {{.Arg.Name}}
 	{{- else}}
-	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- range .Arg.Pairs}}
+	q.{{.Name}} = {{.Name}}
+	{{- end}}
 	{{- end}}
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return 0, err

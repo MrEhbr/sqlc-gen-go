@@ -1,0 +1,27 @@
+version: "2"
+plugins:
+  - name: golang
+    wasm:
+      url: file://../../bin/sqlc-gen-go.wasm
+sql:
+  - schema: "schema.sql"
+    queries: "query.sql"
+    engine: "postgresql"
+    codegen:
+    - plugin: golang
+      out: .
+      options:
+        package: db
+        output_db_file_name: db/db.go
+        sql_package: pgx/v5
+        emit_json_tags: true
+        # Split models into a separate package
+        output_models_package: models
+        models_package_import_path: github.com/sqlc-dev/sqlc-gen-go/examples/pgx-split-packages/models
+        output_models_file_name: models/models.go
+        # Place query files in separate package
+        output_query_files_directory: queries
+        output_queries_package: queries
+        db_package_import_path: github.com/sqlc-dev/sqlc-gen-go/examples/pgx-split-packages/db
+        output_files_suffix: .gen
+        query_parameter_limit: 2

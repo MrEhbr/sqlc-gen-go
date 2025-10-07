@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"go/format"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -29,15 +30,12 @@ type tmplCtx struct {
 	// TODO: Race conditions
 	SourceName string
 
-	EmitJSONTags              bool
-	JsonTagsIDUppercase       bool
-	EmitDBTags                bool
-	EmitPreparedQueries       bool
-	EmitInterface             bool
-	EmitEmptySlices           bool
-	EmitMethodsWithDBArgument bool
-	EmitEnumValidMethod       bool
-	EmitAllEnumValues         bool
+	EmitJSONTags        bool
+	JsonTagsIDUppercase bool
+	EmitDBTags          bool
+	EmitEmptySlices     bool
+	EmitEnumValidMethod bool
+	EmitAllEnumValues   bool
 	UsesCopyFrom              bool
 	UsesBatch                 bool
 	OmitSqlcVersion           bool
@@ -52,42 +50,17 @@ func (t *tmplCtx) OutputQuery(sourceName string) bool {
 	return t.SourceName == sourceName
 }
 
-func (t *tmplCtx) codegenDbarg() string {
-	if t.EmitMethodsWithDBArgument {
-		return "db DBTX, "
-	}
-	return ""
-}
-
-// Called as a global method since subtemplate queryCodeStdExec does not have
-// access to the toplevel tmplCtx
-func (t *tmplCtx) codegenEmitPreparedQueries() bool {
-	return t.EmitPreparedQueries
-}
-
 func (t *tmplCtx) codegenQueryMethod(q Query) string {
 	db := "q.db"
-	if t.EmitMethodsWithDBArgument {
-		db = "db"
-	}
 
 	switch q.Cmd {
 	case ":one":
-		if t.EmitPreparedQueries {
-			return "q.queryRow"
-		}
 		return db + ".QueryRowContext"
 
 	case ":many":
-		if t.EmitPreparedQueries {
-			return "q.query"
-		}
 		return db + ".QueryContext"
 
 	default:
-		if t.EmitPreparedQueries {
-			return "q.exec"
-		}
 		return db + ".ExecContext"
 	}
 }
@@ -183,15 +156,12 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 	}
 
 	tctx := tmplCtx{
-		EmitInterface:             options.EmitInterface,
-		EmitJSONTags:              options.EmitJsonTags,
-		JsonTagsIDUppercase:       options.JsonTagsIdUppercase,
-		EmitDBTags:                options.EmitDbTags,
-		EmitPreparedQueries:       options.EmitPreparedQueries,
-		EmitEmptySlices:           options.EmitEmptySlices,
-		EmitMethodsWithDBArgument: options.EmitMethodsWithDbArgument,
-		EmitEnumValidMethod:       options.EmitEnumValidMethod,
-		EmitAllEnumValues:         options.EmitAllEnumValues,
+		EmitJSONTags:        options.EmitJsonTags,
+		JsonTagsIDUppercase: options.JsonTagsIdUppercase,
+		EmitDBTags:          options.EmitDbTags,
+		EmitEmptySlices:     options.EmitEmptySlices,
+		EmitEnumValidMethod: options.EmitEnumValidMethod,
+		EmitAllEnumValues:   options.EmitAllEnumValues,
 		UsesCopyFrom:              usesCopyFrom(queries),
 		UsesBatch:                 usesBatch(queries),
 		SQLDriver:                 parseDriver(options.SqlPackage),
@@ -232,10 +202,8 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 
 		// These methods are Go specific, they do not belong in the codegen package
 		// (as that is language independent)
-		"dbarg":               tctx.codegenDbarg,
-		"emitPreparedQueries": tctx.codegenEmitPreparedQueries,
-		"queryMethod":         tctx.codegenQueryMethod,
-		"queryRetval":         tctx.codegenQueryRetval,
+		"queryMethod": tctx.codegenQueryMethod,
+		"queryRetval": tctx.codegenQueryRetval,
 	}
 
 	tmpl := template.Must(
@@ -266,7 +234,12 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 		}
 		code, err := format.Source(b.Bytes())
 		if err != nil {
-			fmt.Println(b.String())
+			lines := strings.Split(b.String(), "\n")
+			start := max(0, 420)
+			end := min(len(lines), 435)
+			for i := start; i < end; i++ {
+				fmt.Fprintf(os.Stderr, "%d: %s\n", i+1, lines[i])
+			}
 			return fmt.Errorf("source error: %w", err)
 		}
 
@@ -294,10 +267,6 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 	if options.OutputModelsFileName != "" {
 		modelsFileName = options.OutputModelsFileName
 	}
-	querierFileName := "querier.go"
-	if options.OutputQuerierFileName != "" {
-		querierFileName = options.OutputQuerierFileName
-	}
 	copyfromFileName := "copyfrom.go"
 	if options.OutputCopyfromFileName != "" {
 		copyfromFileName = options.OutputCopyfromFileName
@@ -323,11 +292,6 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 	}
 	if err := execute(modelsFileName, modelsPackageName, "modelsFile"); err != nil {
 		return nil, err
-	}
-	if options.EmitInterface {
-		if err := execute(querierFileName, options.Package, "interfaceFile"); err != nil {
-			return nil, err
-		}
 	}
 	if tctx.UsesCopyFrom {
 		if err := execute(copyfromFileName, options.Package, "copyfromFile"); err != nil {
