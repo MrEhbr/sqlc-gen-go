@@ -122,6 +122,7 @@ func (i *importer) dbImports() fileImports {
 	var pkg []ImportSpec
 	std := []ImportSpec{
 		{Path: "context"},
+		{Path: "fmt"},
 	}
 
 	sqlpkg := parseDriver(i.Options.SqlPackage)
@@ -134,9 +135,6 @@ func (i *importer) dbImports() fileImports {
 		pkg = append(pkg, ImportSpec{Path: "github.com/jackc/pgx/v5"})
 	default:
 		std = append(std, ImportSpec{Path: "database/sql"})
-		if i.Options.EmitPreparedQueries {
-			std = append(std, ImportSpec{Path: "fmt"})
-		}
 	}
 
 	sort.Slice(std, func(i, j int) bool { return std[i].Path < std[j].Path })
@@ -160,7 +158,7 @@ var pqtypeTypes = map[string]struct{}{
 	"pqtype.NullRawMessage": {},
 }
 
-func buildImports(options *opts.Options, queries []Query, uses func(string) bool) (map[string]struct{}, map[ImportSpec]struct{}) {
+func buildImports(options *opts.Options, queries []Query, outputFile OutputFile, uses func(string) bool) (map[string]struct{}, map[ImportSpec]struct{}) {
 	pkg := make(map[ImportSpec]struct{})
 	std := make(map[string]struct{})
 
@@ -243,11 +241,52 @@ func buildImports(options *opts.Options, queries []Query, uses func(string) bool
 		}
 	}
 
+	requiresModelsPackageImport := func() bool {
+		if options.ModelsPackageImportPath == "" {
+			return false
+		}
+
+		for _, q := range queries {
+			// Check if the return type is from models package (possibly a model struct or an enum)
+			if q.hasRetType() && strings.HasPrefix(q.Ret.Type(), options.OutputModelsPackage+".") {
+				return true
+			}
+
+			// Check if the return type struct contains a type from models package (possibly an enum field or an embedded struct)
+			if outputFile != OutputFileInterface && q.hasRetType() && q.Ret.IsStruct() {
+				for _, f := range q.Ret.Struct.Fields {
+					if strings.HasPrefix(f.Type, options.OutputModelsPackage+".") {
+						return true
+					}
+				}
+			}
+
+			// Check if the argument type is from models package (possibly an enum)
+			if !q.Arg.isEmpty() && strings.HasPrefix(q.Arg.Type(), options.OutputModelsPackage+".") {
+				return true
+			}
+
+			// Check if the argument struct contains a type from models package (possibly an enum field)
+			if outputFile != OutputFileInterface && !q.Arg.isEmpty() && q.Arg.IsStruct() {
+				for _, f := range q.Arg.Struct.Fields {
+					if strings.HasPrefix(f.Type, options.OutputModelsPackage+".") {
+						return true
+					}
+				}
+			}
+
+		}
+		return false
+	}
+	if requiresModelsPackageImport() {
+		pkg[ImportSpec{Path: options.ModelsPackageImportPath}] = struct{}{}
+	}
+
 	return std, pkg
 }
 
 func (i *importer) interfaceImports() fileImports {
-	std, pkg := buildImports(i.Options, i.Queries, func(name string) bool {
+	std, pkg := buildImports(i.Options, i.Queries, OutputFileInterface, func(name string) bool {
 		for _, q := range i.Queries {
 			if q.hasRetType() {
 				if usesBatch([]Query{q}) {
@@ -272,7 +311,7 @@ func (i *importer) interfaceImports() fileImports {
 }
 
 func (i *importer) modelImports() fileImports {
-	std, pkg := buildImports(i.Options, nil, i.usesType)
+	std, pkg := buildImports(i.Options, nil, OutputFileModel, i.usesType)
 
 	if len(i.Enums) > 0 {
 		std["fmt"] = struct{}{}
@@ -311,7 +350,7 @@ func (i *importer) queryImports(filename string) fileImports {
 		}
 	}
 
-	std, pkg := buildImports(i.Options, gq, func(name string) bool {
+	std, pkg := buildImports(i.Options, gq, OutputFileQuery, func(name string) bool {
 		for _, q := range gq {
 			if q.hasRetType() {
 				if q.Ret.EmitStruct() {
@@ -402,6 +441,21 @@ func (i *importer) queryImports(filename string) fileImports {
 		pkg[ImportSpec{Path: "github.com/lib/pq"}] = struct{}{}
 	}
 
+	// Add pgx import for query files that use pgx.Row
+	if anyNonCopyFrom && sqlpkg.IsPGX() {
+		switch sqlpkg {
+		case opts.SQLDriverPGXV4:
+			pkg[ImportSpec{Path: "github.com/jackc/pgx/v4"}] = struct{}{}
+		case opts.SQLDriverPGXV5:
+			pkg[ImportSpec{Path: "github.com/jackc/pgx/v5"}] = struct{}{}
+		}
+	}
+
+	// If queries are in a separate package, import the db package for QueryExecutor
+	if i.Options.OutputQueriesPackage != "" && i.Options.OutputQueriesPackage != i.Options.Package && i.Options.DbPackageImportPath != "" {
+		pkg[ImportSpec{Path: i.Options.DbPackageImportPath}] = struct{}{}
+	}
+
 	return sortedImports(std, pkg)
 }
 
@@ -412,7 +466,7 @@ func (i *importer) copyfromImports() fileImports {
 			copyFromQueries = append(copyFromQueries, q)
 		}
 	}
-	std, pkg := buildImports(i.Options, copyFromQueries, func(name string) bool {
+	std, pkg := buildImports(i.Options, copyFromQueries, OutputFileCopyfrom, func(name string) bool {
 		for _, q := range copyFromQueries {
 			if q.hasRetType() {
 				if strings.HasPrefix(q.Ret.Type(), name) {
@@ -429,6 +483,17 @@ func (i *importer) copyfromImports() fileImports {
 	})
 
 	std["context"] = struct{}{}
+
+	sqlpkg := parseDriver(i.Options.SqlPackage)
+	if sqlpkg.IsPGX() {
+		switch sqlpkg {
+		case opts.SQLDriverPGXV4:
+			pkg[ImportSpec{Path: "github.com/jackc/pgx/v4"}] = struct{}{}
+		case opts.SQLDriverPGXV5:
+			pkg[ImportSpec{Path: "github.com/jackc/pgx/v5"}] = struct{}{}
+		}
+	}
+
 	if i.Options.SqlDriver == opts.SQLDriverGoSQLDriverMySQL {
 		std["io"] = struct{}{}
 		std["fmt"] = struct{}{}
@@ -447,7 +512,7 @@ func (i *importer) batchImports() fileImports {
 			batchQueries = append(batchQueries, q)
 		}
 	}
-	std, pkg := buildImports(i.Options, batchQueries, func(name string) bool {
+	std, pkg := buildImports(i.Options, batchQueries, OutputFileBatch, func(name string) bool {
 		for _, q := range batchQueries {
 			if q.hasRetType() {
 				if q.Ret.EmitStruct() {

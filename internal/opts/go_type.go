@@ -11,11 +11,11 @@ import (
 )
 
 type GoType struct {
-	Path    string `json:"import" yaml:"import"`
+	Path    string `json:"import"  yaml:"import"`
 	Package string `json:"package" yaml:"package"`
-	Name    string `json:"type" yaml:"type"`
+	Name    string `json:"type"    yaml:"type"`
 	Pointer bool   `json:"pointer" yaml:"pointer"`
-	Slice   bool   `json:"slice" yaml:"slice"`
+	Slice   bool   `json:"slice"   yaml:"slice"`
 	Spec    string `json:"-"`
 	BuiltIn bool   `json:"-"`
 }
@@ -66,9 +66,11 @@ func (o *GoType) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-var validIdentifier = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
-var versionNumber = regexp.MustCompile(`^v[0-9]+$`)
-var invalidIdentifier = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+var (
+	validIdentifier   = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+	versionNumber     = regexp.MustCompile(`^v[0-9]+$`)
+	invalidIdentifier = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+)
 
 func generatePackageID(importPath string) (string, bool) {
 	parts := strings.Split(importPath, "/")
