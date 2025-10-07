@@ -1,0 +1,91 @@
+{{define "copyfromCodePgx"}}
+{{range .GoQueries}}
+{{if eq .Cmd ":copyfrom" }}
+{{if .Arg.EmitStruct}}
+type {{.Arg.Type}} struct { {{- range .Arg.Struct.Fields}}
+  {{.Name}} {{.Type}} {{if .Tag}}{{$.Q}}{{.Tag}}{{$.Q}}{{end}}
+  {{- end}}
+}
+{{end}}
+
+// iteratorFor{{.MethodName}} implements pgx.CopyFromSource.
+type iteratorFor{{.MethodName}} struct {
+	rows []{{.Arg.DefineType}}
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorFor{{.MethodName}}) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorFor{{.MethodName}}) Values() ([]any, error) {
+	return []any{
+{{- if .Arg.Struct }}
+{{- range .Arg.Struct.Fields }}
+		r.rows[0].{{.Name}},
+{{- end }}
+{{- else }}
+		r.rows[0],
+{{- end }}
+	}, nil
+}
+
+func (r iteratorFor{{.MethodName}}) Err() error {
+	return nil
+}
+
+type {{lowerTitle .MethodName}}Query struct {
+	ex         QueryExecutor
+	rows       []{{.Arg.DefineType}}
+	rowsCopied int64
+}
+
+func (q *{{lowerTitle .MethodName}}Query) SQL() string {
+	return ""
+}
+
+func (q *{{lowerTitle .MethodName}}Query) Args() []any {
+	return nil
+}
+
+func (q *{{lowerTitle .MethodName}}Query) TableName() pgx.Identifier {
+	return {{.TableIdentifierAsGoSlice}}
+}
+
+func (q *{{lowerTitle .MethodName}}Query) ColumnNames() []string {
+	return {{.Arg.ColumnNamesAsGoSlice}}
+}
+
+func (q *{{lowerTitle .MethodName}}Query) CopyFromSource() pgx.CopyFromSource {
+	return &iteratorFor{{.MethodName}}{rows: q.rows}
+}
+
+func (q *{{lowerTitle .MethodName}}Query) SetRowsCopied(n int64) {
+	q.rowsCopied = n
+}
+
+func New{{.MethodName}}Query(ex QueryExecutor) *{{lowerTitle .MethodName}}Query {
+	return &{{lowerTitle .MethodName}}Query{ex: ex}
+}
+
+{{range .Comments}}//{{.}}
+{{end -}}
+func (q *{{lowerTitle .MethodName}}Query) Eval(ctx context.Context, {{.Arg.SlicePair}}) (int64, error) {
+	q.rows = {{.Arg.Name}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return 0, err
+	}
+	return q.rowsCopied, nil
+}
+
+{{end}}
+{{end}}
+{{end}}

@@ -1,10 +1,13 @@
 {{define "queryCodeStd"}}
 {{range .GoQueries}}
 {{if $.OutputQuery .SourceName}}
+{{if and (ne .Cmd ":copyfrom") (ne (hasPrefix .Cmd ":batch") true)}}
 const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
 {{escape .SQL}}
 {{$.Q}}
+{{end}}
 
+{{if ne (hasPrefix .Cmd ":batch") true}}
 {{if .Arg.EmitStruct}}
 type {{.Arg.Type}} struct { {{- range .Arg.UniqueFields}}
   {{.Name}} {{.Type}} {{if .Tag}}{{$.Q}}{{.Tag}}{{$.Q}}{{end}}
@@ -18,138 +21,384 @@ type {{.Ret.Type}} struct { {{- range .Ret.Struct.Fields}}
   {{- end}}
 }
 {{end}}
+{{end}}
 
 {{if eq .Cmd ":one"}}
 {{range .Comments}}//{{.}}
 {{end -}}
-func (q *Queries) {{.MethodName}}(ctx context.Context, {{ dbarg }} {{.Arg.Pair}}) ({{.Ret.DefineType}}, error) {
-    {{- template "queryCodeStdExec" . }}
-	{{- if or (ne .Arg.Pair .Ret.Pair) (ne .Arg.DefineType .Ret.DefineType) }}
-	var {{.Ret.Name}} {{.Ret.Type}}
+type {{.MethodName}}Query struct {
+	ex     {{$.PackageQualifier}}QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg    {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
 	{{- end}}
-	err := row.Scan({{.Ret.Scan}})
-	return {{.Ret.ReturnName}}, err
+	result {{.Ret.Type}}
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.Pair}}
+	{{- if .Arg.EmitStruct}}
+	{{- $argName := .Arg.Name}}
+	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
+	{{- else}}
+	return []any{q.{{.Arg.Name}}}
+	{{- end}}
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) Scan(row *sql.Row) error {
+	return row.Scan({{range $i, $f := .Ret.Struct.Fields}}{{if $i}}, {{end}}&q.result.{{$f.Name}}{{end}})
+}
+
+func (q *{{.MethodName}}Query) Result() {{.Ret.DefineType}} {
+	{{- if .Ret.IsPointer}}
+	return &q.result
+	{{- else}}
+	return q.result
+	{{- end}}
+}
+
+{{- if .Arg.Pair}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) ({{.Ret.DefineType}}, error) {
+	{{- if .Arg.EmitStruct}}
+	q.arg = {{.Arg.Name}}
+	{{- else}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		{{- if .Ret.IsPointer}}
+		return nil, err
+		{{- else}}
+		var zero {{.Ret.DefineType}}
+		return zero, err
+		{{- end}}
+	}
+	return q.Result(), nil
+}
+{{- else}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context) ({{.Ret.DefineType}}, error) {
+	if err := q.ex.Execute(ctx, q); err != nil {
+		{{- if .Ret.IsPointer}}
+		return nil, err
+		{{- else}}
+		var zero {{.Ret.DefineType}}
+		return zero, err
+		{{- end}}
+	}
+	return q.Result(), nil
+}
+{{- end}}
+
+func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
 }
 {{end}}
 
 {{if eq .Cmd ":many"}}
 {{range .Comments}}//{{.}}
 {{end -}}
-func (q *Queries) {{.MethodName}}(ctx context.Context, {{ dbarg }} {{.Arg.Pair}}) ([]{{.Ret.DefineType}}, error) {
-    {{- template "queryCodeStdExec" . }}
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
-    {{- if $.EmitEmptySlices}}
-    items := []{{.Ret.DefineType}}{}
-    {{else}}
-    var items []{{.Ret.DefineType}}
-    {{end -}}
-    for rows.Next() {
-        var {{.Ret.Name}} {{.Ret.Type}}
-        if err := rows.Scan({{.Ret.Scan}}); err != nil {
-            return nil, err
-        }
-        items = append(items, {{.Ret.ReturnName}})
-    }
-    if err := rows.Close(); err != nil {
-        return nil, err
-    }
-    if err := rows.Err(); err != nil {
-        return nil, err
-    }
-    return items, nil
+type {{.MethodName}}Query struct {
+	ex      {{$.PackageQualifier}}QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg     {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	results []{{.Ret.Type}}
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.Pair}}
+	{{- if .Arg.EmitStruct}}
+	{{- $argName := .Arg.Name}}
+	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
+	{{- else}}
+	return []any{q.{{.Arg.Name}}}
+	{{- end}}
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) ScanRow(row *sql.Rows) error {
+	{{- $retName := .Ret.Name}}
+	var {{$retName}} {{.Ret.Type}}
+	if err := row.Scan({{range $i, $f := .Ret.Struct.Fields}}{{if $i}}, {{end}}&{{$retName}}.{{$f.Name}}{{end}}); err != nil {
+		return err
+	}
+	q.results = append(q.results, {{.Ret.ReturnName}})
+	return nil
+}
+
+func (q *{{.MethodName}}Query) Results() []{{.Ret.DefineType}} {
+	{{- if eq .Ret.Type .Ret.DefineType}}
+	return q.results
+	{{- else}}
+	results := make([]{{.Ret.DefineType}}, len(q.results))
+	for i, r := range q.results {
+		{{- if .Ret.IsPointer}}
+		results[i] = &r
+		{{- else}}
+		results[i] = r
+		{{- end}}
+	}
+	return results
+	{{- end}}
+}
+
+{{- if .Arg.Pair}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) ([]{{.Ret.DefineType}}, error) {
+	{{- if .Arg.EmitStruct}}
+	q.arg = {{.Arg.Name}}
+	{{- else}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	q.results = nil
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return nil, err
+	}
+	return q.Results(), nil
+}
+{{- else}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context) ([]{{.Ret.DefineType}}, error) {
+	q.results = nil
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return nil, err
+	}
+	return q.Results(), nil
+}
+{{- end}}
+
+func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
 }
 {{end}}
 
 {{if eq .Cmd ":exec"}}
 {{range .Comments}}//{{.}}
 {{end -}}
-func (q *Queries) {{.MethodName}}(ctx context.Context, {{ dbarg }} {{.Arg.Pair}}) error {
-    {{- template "queryCodeStdExec" . }}
-    return err
+type {{.MethodName}}Query struct {
+	ex           {{$.PackageQualifier}}QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg          {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	rowsAffected int64
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.Pair}}
+	{{- if .Arg.EmitStruct}}
+	{{- $argName := .Arg.Name}}
+	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
+	{{- else}}
+	return []any{q.{{.Arg.Name}}}
+	{{- end}}
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetRowsAffected(n int64) {
+	q.rowsAffected = n
+}
+
+{{- if .Arg.Pair}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) error {
+	{{- if .Arg.EmitStruct}}
+	q.arg = {{.Arg.Name}}
+	{{- else}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	return q.ex.Execute(ctx, q)
+}
+{{- else}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context) error {
+	return q.ex.Execute(ctx, q)
+}
+{{- end}}
+
+func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
 }
 {{end}}
 
 {{if eq .Cmd ":execrows"}}
 {{range .Comments}}//{{.}}
 {{end -}}
-func (q *Queries) {{.MethodName}}(ctx context.Context, {{ dbarg }} {{.Arg.Pair}}) (int64, error) {
-    {{- template "queryCodeStdExec" . }}
-    if err != nil {
-        return 0, err
-    }
-    return result.RowsAffected()
+type {{.MethodName}}Query struct {
+	ex           {{$.PackageQualifier}}QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg          {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	rowsAffected int64
 }
-{{end}}
 
-{{if eq .Cmd ":execlastid"}}
-{{range .Comments}}//{{.}}
-{{end -}}
-func (q *Queries) {{.MethodName}}(ctx context.Context, {{ dbarg }} {{.Arg.Pair}}) (int64, error) {
-    {{- template "queryCodeStdExec" . }}
-    if err != nil {
-        return 0, err
-    }
-    return result.LastInsertId()
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.Pair}}
+	{{- if .Arg.EmitStruct}}
+	{{- $argName := .Arg.Name}}
+	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
+	{{- else}}
+	return []any{q.{{.Arg.Name}}}
+	{{- end}}
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetRowsAffected(n int64) {
+	q.rowsAffected = n
+}
+
+{{- if .Arg.Pair}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) (int64, error) {
+	{{- if .Arg.EmitStruct}}
+	q.arg = {{.Arg.Name}}
+	{{- else}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return 0, err
+	}
+	return q.rowsAffected, nil
+}
+{{- else}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context) (int64, error) {
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return 0, err
+	}
+	return q.rowsAffected, nil
+}
+{{- end}}
+
+func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
 }
 {{end}}
 
 {{if eq .Cmd ":execresult"}}
 {{range .Comments}}//{{.}}
 {{end -}}
-func (q *Queries) {{.MethodName}}(ctx context.Context, {{ dbarg }} {{.Arg.Pair}}) (sql.Result, error) {
-    {{- template "queryCodeStdExec" . }}
+type {{.MethodName}}Query struct {
+	ex           {{$.PackageQualifier}}QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg          {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.Pair}}
+	{{- if .Arg.EmitStruct}}
+	{{- $argName := .Arg.Name}}
+	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
+	{{- else}}
+	return []any{q.{{.Arg.Name}}}
+	{{- end}}
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
 }
 {{end}}
 
-{{end}}
-{{end}}
+{{if eq .Cmd ":execlastid"}}
+{{range .Comments}}//{{.}}
+{{end -}}
+type {{.MethodName}}Query struct {
+	ex           {{$.PackageQualifier}}QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg          {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	lastID       int64
+	rowsAffected int64
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.Pair}}
+	{{- if .Arg.EmitStruct}}
+	{{- $argName := .Arg.Name}}
+	return []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}q.{{$argName}}.{{$f.Name}}{{end}} }
+	{{- else}}
+	return []any{q.{{.Arg.Name}}}
+	{{- end}}
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetLastInsertID(n int64) {
+	q.lastID = n
+}
+
+func (q *{{.MethodName}}Query) SetRowsAffected(n int64) {
+	q.rowsAffected = n
+}
+
+{{- if .Arg.Pair}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.Pair}}) (int64, error) {
+	{{- if .Arg.EmitStruct}}
+	q.arg = {{.Arg.Name}}
+	{{- else}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return 0, err
+	}
+	return q.lastID, nil
+}
+{{- else}}
+func (q *{{.MethodName}}Query) Eval(ctx context.Context) (int64, error) {
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return 0, err
+	}
+	return q.lastID, nil
+}
+{{- end}}
+
+func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
+}
 {{end}}
 
-{{define "queryCodeStdExec"}}
-    {{- if .Arg.HasSqlcSlices }}
-        query := {{.ConstantName}}
-        var queryParams []interface{}
-        {{- if .Arg.Struct }}
-            {{- $arg := .Arg }}
-            {{- range .Arg.Struct.Fields }}
-                {{- if .HasSqlcSlice }}
-                    if len({{$arg.VariableForField .}}) > 0 {
-                      for _, v := range {{$arg.VariableForField .}} {
-                        queryParams = append(queryParams, v)
-                      }
-                      query = strings.Replace(query, "/*SLICE:{{.Column.Name}}*/?", strings.Repeat(",?", len({{$arg.VariableForField .}}))[1:], 1)
-                    } else {
-                      query = strings.Replace(query, "/*SLICE:{{.Column.Name}}*/?", "NULL", 1)
-                    }
-                {{- else }}
-                  queryParams = append(queryParams, {{$arg.VariableForField .}})
-                {{- end }}
-            {{- end }}
-        {{- else }}
-            {{- /* Single argument parameter to this goroutine (they are not packed
-                in a struct), because .Arg.HasSqlcSlices further up above was true,
-                this section is 100% a slice (impossible to get here otherwise).
-            */}}
-            if len({{.Arg.Name}}) > 0 {
-              for _, v := range {{.Arg.Name}} {
-                queryParams = append(queryParams, v)
-              }
-              query = strings.Replace(query, "/*SLICE:{{.Arg.Column.Name}}*/?", strings.Repeat(",?", len({{.Arg.Name}}))[1:], 1)
-            } else {
-              query = strings.Replace(query, "/*SLICE:{{.Arg.Column.Name}}*/?", "NULL", 1)
-            }
-        {{- end }}
-        {{- if emitPreparedQueries }}
-        {{ queryRetval . }} {{ queryMethod . }}(ctx, nil, query, queryParams...)
-        {{- else}}
-        {{ queryRetval . }} {{ queryMethod . }}(ctx, query, queryParams...)
-        {{- end -}}
-    {{- else if emitPreparedQueries }}
-        {{- queryRetval . }} {{ queryMethod . }}(ctx, q.{{.FieldName}}, {{.ConstantName}}, {{.Arg.Params}})
-    {{- else}}
-        {{- queryRetval . }} {{ queryMethod . }}(ctx, {{.ConstantName}}, {{.Arg.Params}})
-    {{- end -}}
+
+{{end}}
+{{end}}
 {{end}}

@@ -1,4 +1,4 @@
-{{define "dbCodeTemplateStd"}}
+{{define "dbCodeGoSqlDriver"}}
 
 type DBTX interface {
 	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)

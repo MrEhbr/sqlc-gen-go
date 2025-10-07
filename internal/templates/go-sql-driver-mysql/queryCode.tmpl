@@ -1,0 +1,405 @@
+{{define "queryCodeGoSqlDriver"}}
+{{range .GoQueries}}
+{{if eq .Cmd ":one"}}
+const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
+{{escape .SQL}}
+{{$.Q}}
+
+{{if $.EmitParamsStructs}}
+type {{.MethodName}}Params struct { {{- range .Params}}
+	{{.Name}} {{.Type}} {{if $.EmitJsonTags}}{{$.Q}}json:"{{.JSONTag}}"{{$.Q}}{{end}}
+	{{- end}}
+}
+{{end}}
+
+type {{.MethodName}}Query struct {
+	ex     QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg    {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	result {{.Ret.Type}}
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.UniqueFunction}}
+	return {{.Arg.UniqueFunction}}({{.Arg.Params}})
+	{{- else if .Arg.Pair}}
+	return []any{ {{.Arg.Params}} }
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) Scan(row *sql.Row) error {
+	{{- if .Ret.EmitStruct}}
+	return row.Scan({{range $i, $f := .Ret.Struct.Fields}}{{if $i}}, {{end}}&q.result.{{$f.Name}}{{end}})
+	{{- else}}
+	return row.Scan(&q.result)
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) Result() {{.Ret.Type}} {
+	return q.result
+}
+
+func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.Pair}}{{end}}) ({{.Ret.Type}}, error) {
+	{{- if .Arg.Pair}}
+	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
+		{{- range .Params}}
+		{{.Name}}: {{.Name}},
+		{{- end}}
+	}{{else}}{{.Arg.Name}}{{end}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		var zero {{.Ret.Type}}
+		return zero, err
+	}
+	return q.Result(), nil
+}
+
+func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
+}
+
+{{end}}
+
+{{if eq .Cmd ":many"}}
+const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
+{{escape .SQL}}
+{{$.Q}}
+
+{{if $.EmitParamsStructs}}
+type {{.MethodName}}Params struct { {{- range .Params}}
+	{{.Name}} {{.Type}} {{if $.EmitJsonTags}}{{$.Q}}json:"{{.JSONTag}}"{{$.Q}}{{end}}
+	{{- end}}
+}
+{{end}}
+
+type {{.MethodName}}Query struct {
+	ex      QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg     {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	results []{{.Ret.Type}}
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.UniqueFunction}}
+	return {{.Arg.UniqueFunction}}({{.Arg.Params}})
+	{{- else if .Arg.Pair}}
+	return []any{ {{.Arg.Params}} }
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) ScanRow(row *sql.Rows) error {
+	var i {{.Ret.Type}}
+	{{- if .Ret.EmitStruct}}
+	if err := row.Scan({{range $i, $f := .Ret.Struct.Fields}}{{if $i}}, {{end}}&i.{{$f.Name}}{{end}}); err != nil {
+		return err
+	}
+	{{- else}}
+	if err := row.Scan(&i); err != nil {
+		return err
+	}
+	{{- end}}
+	q.results = append(q.results, i)
+	return nil
+}
+
+func (q *{{.MethodName}}Query) Results() []{{.Ret.Type}} {
+	return q.results
+}
+
+func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.Pair}}{{end}}) ([]{{.Ret.Type}}, error) {
+	{{- if .Arg.Pair}}
+	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
+		{{- range .Params}}
+		{{.Name}}: {{.Name}},
+		{{- end}}
+	}{{else}}{{.Arg.Name}}{{end}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	q.results = nil
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return nil, err
+	}
+	return q.Results(), nil
+}
+
+func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
+}
+
+{{end}}
+
+{{if eq .Cmd ":exec"}}
+const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
+{{escape .SQL}}
+{{$.Q}}
+
+{{if $.EmitParamsStructs}}
+type {{.MethodName}}Params struct { {{- range .Params}}
+	{{.Name}} {{.Type}} {{if $.EmitJsonTags}}{{$.Q}}json:"{{.JSONTag}}"{{$.Q}}{{end}}
+	{{- end}}
+}
+{{end}}
+
+type {{.MethodName}}Query struct {
+	ex           QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg          {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	rowsAffected int64
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.UniqueFunction}}
+	return {{.Arg.UniqueFunction}}({{.Arg.Params}})
+	{{- else if .Arg.Pair}}
+	return []any{ {{.Arg.Params}} }
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetRowsAffected(n int64) {
+	q.rowsAffected = n
+}
+
+func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.Pair}}{{end}}) error {
+	{{- if .Arg.Pair}}
+	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
+		{{- range .Params}}
+		{{.Name}}: {{.Name}},
+		{{- end}}
+	}{{else}}{{.Arg.Name}}{{end}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	return q.ex.Execute(ctx, q)
+}
+
+func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
+}
+
+{{end}}
+
+{{if eq .Cmd ":execrows"}}
+const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
+{{escape .SQL}}
+{{$.Q}}
+
+{{if $.EmitParamsStructs}}
+type {{.MethodName}}Params struct { {{- range .Params}}
+	{{.Name}} {{.Type}} {{if $.EmitJsonTags}}{{$.Q}}json:"{{.JSONTag}}"{{$.Q}}{{end}}
+	{{- end}}
+}
+{{end}}
+
+type {{.MethodName}}Query struct {
+	ex           QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg          {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	rowsAffected int64
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.UniqueFunction}}
+	return {{.Arg.UniqueFunction}}({{.Arg.Params}})
+	{{- else if .Arg.Pair}}
+	return []any{ {{.Arg.Params}} }
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetRowsAffected(n int64) {
+	q.rowsAffected = n
+}
+
+func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.Pair}}{{end}}) (int64, error) {
+	{{- if .Arg.Pair}}
+	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
+		{{- range .Params}}
+		{{.Name}}: {{.Name}},
+		{{- end}}
+	}{{else}}{{.Arg.Name}}{{end}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return 0, err
+	}
+	return q.rowsAffected, nil
+}
+
+func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
+}
+
+{{end}}
+
+{{if eq .Cmd ":execlastid"}}
+const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
+{{escape .SQL}}
+{{$.Q}}
+
+{{if $.EmitParamsStructs}}
+type {{.MethodName}}Params struct { {{- range .Params}}
+	{{.Name}} {{.Type}} {{if $.EmitJsonTags}}{{$.Q}}json:"{{.JSONTag}}"{{$.Q}}{{end}}
+	{{- end}}
+}
+{{end}}
+
+type {{.MethodName}}Query struct {
+	ex           QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg          {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	lastInsertID int64
+	rowsAffected int64
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.UniqueFunction}}
+	return {{.Arg.UniqueFunction}}({{.Arg.Params}})
+	{{- else if .Arg.Pair}}
+	return []any{ {{.Arg.Params}} }
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetLastInsertID(id int64) {
+	q.lastInsertID = id
+}
+
+func (q *{{.MethodName}}Query) SetRowsAffected(n int64) {
+	q.rowsAffected = n
+}
+
+func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.Pair}}{{end}}) (int64, error) {
+	{{- if .Arg.Pair}}
+	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
+		{{- range .Params}}
+		{{.Name}}: {{.Name}},
+		{{- end}}
+	}{{else}}{{.Arg.Name}}{{end}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return 0, err
+	}
+	return q.lastInsertID, nil
+}
+
+func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
+}
+
+{{end}}
+
+{{if eq .Cmd ":execresult"}}
+const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
+{{escape .SQL}}
+{{$.Q}}
+
+{{if $.EmitParamsStructs}}
+type {{.MethodName}}Params struct { {{- range .Params}}
+	{{.Name}} {{.Type}} {{if $.EmitJsonTags}}{{$.Q}}json:"{{.JSONTag}}"{{$.Q}}{{end}}
+	{{- end}}
+}
+{{end}}
+
+type {{.MethodName}}Result struct {
+	LastInsertID int64
+	RowsAffected int64
+}
+
+type {{.MethodName}}Query struct {
+	ex     QueryExecutor
+	{{- if .Arg.EmitStruct}}
+	arg    {{.Arg.Type}}
+	{{- else if .Arg.Pair}}
+	{{.Arg.Pair}}
+	{{- end}}
+	result {{.MethodName}}Result
+}
+
+func (q *{{.MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{.MethodName}}Query) Args() []any {
+	{{- if .Arg.UniqueFunction}}
+	return {{.Arg.UniqueFunction}}({{.Arg.Params}})
+	{{- else if .Arg.Pair}}
+	return []any{ {{.Arg.Params}} }
+	{{- else}}
+	return nil
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetLastInsertID(id int64) {
+	q.result.LastInsertID = id
+}
+
+func (q *{{.MethodName}}Query) SetRowsAffected(n int64) {
+	q.result.RowsAffected = n
+}
+
+func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.Pair}}{{end}}) ({{.MethodName}}Result, error) {
+	{{- if .Arg.Pair}}
+	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
+		{{- range .Params}}
+		{{.Name}}: {{.Name}},
+		{{- end}}
+	}{{else}}{{.Arg.Name}}{{end}}
+	q.{{.Arg.Name}} = {{.Arg.Name}}
+	{{- end}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return {{.MethodName}}Result{}, err
+	}
+	return q.result, nil
+}
+
+func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{ex: ex}
+}
+
+{{end}}
+{{end}}
+{{end}}

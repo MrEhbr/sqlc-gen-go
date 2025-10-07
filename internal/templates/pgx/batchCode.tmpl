@@ -10,7 +10,7 @@ const {{.ConstantName}} = {{$.Q}}-- name: {{.MethodName}} {{.Cmd}}
 {{escape .SQL}}
 {{$.Q}}
 
-type {{.MethodName}}BatchResults struct {
+type {{lowerTitle .MethodName}}BatchResults struct {
     br pgx.BatchResults
     tot int
     closed bool
@@ -30,12 +30,24 @@ type {{.Ret.Type}} struct { {{- range .Ret.Struct.Fields}}
 }
 {{end}}
 
-{{range .Comments}}//{{.}}
-{{end -}}
-func (q *Queries) {{.MethodName}}(ctx context.Context, {{ if $.EmitMethodsWithDBArgument}}db DBTX,{{end}} {{.Arg.SlicePair}}) *{{.MethodName}}BatchResults {
+type {{lowerTitle .MethodName}}Query struct {
+	ex      QueryExecutor
+	args    []{{.Arg.DefineType}}
+	results *{{lowerTitle .MethodName}}BatchResults
+}
+
+func (q *{{lowerTitle .MethodName}}Query) SQL() string {
+	return {{.ConstantName}}
+}
+
+func (q *{{lowerTitle .MethodName}}Query) Args() []any {
+	return nil
+}
+
+func (q *{{lowerTitle .MethodName}}Query) BuildBatch() *pgx.Batch {
     batch := &pgx.Batch{}
-    for _, a := range {{index .Arg.Name}} {
-        vals := []interface{}{
+    for _, a := range q.args {
+        vals := []any{
         {{- if .Arg.Struct }}
         {{- range .Arg.Struct.Fields }}
             a.{{.Name}},
@@ -46,12 +58,30 @@ func (q *Queries) {{.MethodName}}(ctx context.Context, {{ if $.EmitMethodsWithDB
         }
         batch.Queue({{.ConstantName}}, vals...)
     }
-    br := {{if not $.EmitMethodsWithDBArgument}}q.{{end}}db.SendBatch(ctx, batch)
-    return &{{.MethodName}}BatchResults{br,len({{.Arg.Name}}),false}
+    return batch
+}
+
+func (q *{{lowerTitle .MethodName}}Query) ProcessResults(br pgx.BatchResults) error {
+	q.results = &{{lowerTitle .MethodName}}BatchResults{br, len(q.args), false}
+	return nil
+}
+
+func New{{.MethodName}}Query(ex QueryExecutor) *{{lowerTitle .MethodName}}Query {
+	return &{{lowerTitle .MethodName}}Query{ex: ex}
+}
+
+{{range .Comments}}//{{.}}
+{{end -}}
+func (q *{{lowerTitle .MethodName}}Query) Eval(ctx context.Context, {{.Arg.SlicePair}}) (*{{lowerTitle .MethodName}}BatchResults, error) {
+	q.args = {{.Arg.Name}}
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return nil, err
+	}
+	return q.results, nil
 }
 
 {{if eq .Cmd ":batchexec"}}
-func (b *{{.MethodName}}BatchResults) Exec(f func(int, error)) {
+func (b *{{lowerTitle .MethodName}}BatchResults) Exec(f func(int, error)) {
 	defer b.br.Close()
    for t := 0; t < b.tot; t++ {
      if b.closed {
@@ -69,7 +99,7 @@ func (b *{{.MethodName}}BatchResults) Exec(f func(int, error)) {
 {{end}}
 
 {{if eq .Cmd ":batchmany"}}
-func (b *{{.MethodName}}BatchResults) Query(f func(int, []{{.Ret.DefineType}}, error)) {
+func (b *{{lowerTitle .MethodName}}BatchResults) Query(f func(int, []{{.Ret.DefineType}}, error)) {
 	defer b.br.Close()
    for t := 0; t < b.tot; t++ {
      {{- if $.EmitEmptySlices}}
@@ -106,7 +136,7 @@ func (b *{{.MethodName}}BatchResults) Query(f func(int, []{{.Ret.DefineType}}, e
 {{end}}
 
 {{if eq .Cmd ":batchone"}}
-func (b *{{.MethodName}}BatchResults) QueryRow(f func(int, {{.Ret.DefineType}}, error)) {
+func (b *{{lowerTitle .MethodName}}BatchResults) QueryRow(f func(int, {{.Ret.DefineType}}, error)) {
 	defer b.br.Close()
    for t := 0; t < b.tot; t++ {
      var {{.Ret.Name}} {{.Ret.Type}}
@@ -125,7 +155,7 @@ func (b *{{.MethodName}}BatchResults) QueryRow(f func(int, {{.Ret.DefineType}}, 
 }
 {{end}}
 
-func (b *{{.MethodName}}BatchResults) Close() error {
+func (b *{{lowerTitle .MethodName}}BatchResults) Close() error {
     b.closed = true
     return b.br.Close()
 }

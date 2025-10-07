@@ -23,6 +23,10 @@ func convertRowsFor{{.MethodName}}(w *io.PipeWriter, {{.Arg.SlicePair}}) {
 
 {{range .Comments}}//{{.}}
 {{end -}}
+type {{.MethodName}}Query struct {
+	db DBTX
+}
+
 // {{.MethodName}} uses MySQL's LOAD DATA LOCAL INFILE and is not atomic.
 //
 // Errors and duplicate keys are treated as warnings and insertion will
@@ -31,7 +35,7 @@ func convertRowsFor{{.MethodName}}(w *io.PipeWriter, {{.Arg.SlicePair}}) {
 //
 // Check the documentation for more information:
 // https://dev.mysql.com/doc/refman/8.0/en/load-data.html#load-data-error-handling
-func (q *Queries) {{.MethodName}}(ctx context.Context{{if $.EmitMethodsWithDBArgument}}, db DBTX{{end}}, {{.Arg.SlicePair}}) (int64, error) {
+func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.SlicePair}}) (int64, error) {
 	pr, pw := io.Pipe()
 	defer pr.Close()
 	rh := fmt.Sprintf("{{.MethodName}}_%d", atomic.AddUint32(&readerHandlerSequenceFor{{.MethodName}}, 1))
@@ -40,11 +44,15 @@ func (q *Queries) {{.MethodName}}(ctx context.Context{{if $.EmitMethodsWithDBArg
 	go convertRowsFor{{.MethodName}}(pw, {{.Arg.Name}})
 	// The string interpolation is necessary because LOAD DATA INFILE requires
 	// the file name to be given as a literal string.
-	result, err := {{if (not $.EmitMethodsWithDBArgument)}}q.{{end}}db.ExecContext(ctx, fmt.Sprintf("LOAD DATA LOCAL INFILE '%s' INTO TABLE {{.TableIdentifierForMySQL}} %s ({{range $index, $name := .Arg.ColumnNames}}{{if gt $index 0}}, {{end}}{{$name}}{{end}})", "Reader::" + rh, mysqltsv.Escaping))
+	result, err := q.db.ExecContext(ctx, fmt.Sprintf("LOAD DATA LOCAL INFILE '%s' INTO TABLE {{.TableIdentifierForMySQL}} %s ({{range $index, $name := .Arg.ColumnNames}}{{if gt $index 0}}, {{end}}{{$name}}{{end}})", "Reader::" + rh, mysqltsv.Escaping))
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+func New{{.MethodName}}Query(db DBTX) *{{.MethodName}}Query {
+	return &{{.MethodName}}Query{db: db}
 }
 
 {{end}}
