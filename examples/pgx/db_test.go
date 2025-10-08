@@ -2,25 +2,53 @@ package db_test
 
 import (
 	"context"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sqlc-dev/sqlc-gen-go/examples/pgx/db"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestDB(t *testing.T) *pgxpool.Pool {
+func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
 
-	databaseURL := getEnv("DATABASE_URL", "")
-	if databaseURL == "" {
-		t.Skip("Skipping test: DATABASE_URL not set")
+	ctx := context.Background()
+
+	pgContainer, err := postgres.Run(ctx,
+		"postgres:18-alpine",
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("postgres"),
+		postgres.WithPassword("password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60*time.Second)),
+	)
+	if err != nil {
+		t.Fatalf("failed to start postgres container: %v", err)
 	}
 
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, databaseURL)
+	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		t.Fatalf("failed to connect to database: %v", err)
+		t.Fatalf("failed to get connection string: %v", err)
+	}
+
+	var pool *pgxpool.Pool
+	for range 10 {
+		pool, err = pgxpool.New(ctx, connStr)
+		if err == nil {
+			if err = pool.Ping(ctx); err == nil {
+				break
+			}
+			pool.Close()
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		t.Fatalf("failed to connect to database after retries: %v", err)
 	}
 
 	// Create schema
@@ -42,20 +70,20 @@ CREATE TABLE users (
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
-	return pool
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+	cleanup := func() {
+		pool.Close()
+		if err := pgContainer.Terminate(ctx); err != nil {
+			t.Logf("failed to terminate container: %v", err)
+		}
 	}
-	return defaultValue
+
+	return pool, cleanup
 }
 
 func TestQueries(t *testing.T) {
 	ctx := context.Background()
-	pool := setupTestDB(t)
-	defer pool.Close()
+	pool, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	executor := db.NewExecutor(pool)
 
@@ -87,7 +115,7 @@ func TestQueries(t *testing.T) {
 		created, err := createQuery.Eval(ctx, db.CreateUserParams{
 			Name:   "foobaz",
 			Email:  "foobaz@example.com",
-		Status: db.UserStatusActive,
+			Status: db.UserStatusActive,
 		})
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
@@ -121,7 +149,7 @@ func TestQueries(t *testing.T) {
 		created, err := createQuery.Eval(ctx, db.CreateUserParams{
 			Name:   "barbaz",
 			Email:  "barbaz@example.com",
-		Status: db.UserStatusActive,
+			Status: db.UserStatusActive,
 		})
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
@@ -152,7 +180,7 @@ func TestQueries(t *testing.T) {
 		created, err := createQuery.Eval(ctx, db.CreateUserParams{
 			Name:   "barfoo",
 			Email:  "barfoo@example.com",
-		Status: db.UserStatusActive,
+			Status: db.UserStatusActive,
 		})
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
@@ -174,7 +202,7 @@ func TestQueries(t *testing.T) {
 		created, err := createQuery.Eval(ctx, db.CreateUserParams{
 			Name:   "bazbar",
 			Email:  "bazbar@example.com",
-		Status: db.UserStatusActive,
+			Status: db.UserStatusActive,
 		})
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
@@ -197,9 +225,9 @@ func TestQueries(t *testing.T) {
 	t.Run("BatchInsertUsers", func(t *testing.T) {
 		batchQuery := db.NewBatchInsertUsersQuery(executor)
 		params := []db.BatchInsertUsersParams{
-			{Name:   "batch1", Email: "batch1@example.com"},
-			{Name:   "batch2", Email: "batch2@example.com"},
-			{Name:   "batch3", Email: "batch3@example.com"},
+			{Name: "batch1", Email: "batch1@example.com"},
+			{Name: "batch2", Email: "batch2@example.com"},
+			{Name: "batch3", Email: "batch3@example.com"},
 		}
 
 		results, err := batchQuery.Eval(ctx, params)
@@ -224,10 +252,12 @@ func TestQueries(t *testing.T) {
 	t.Run("BatchGetUsers", func(t *testing.T) {
 		// First create some users to get
 		createQuery := db.NewCreateUserQuery(executor)
-		user1, _ := createQuery.Eval(ctx, db.CreateUserParams{Name:   "batchget1", Email:  "batchget1@example.com",
+		user1, _ := createQuery.Eval(ctx, db.CreateUserParams{
+			Name: "batchget1", Email: "batchget1@example.com",
 			Status: db.UserStatusActive,
 		})
-		user2, _ := createQuery.Eval(ctx, db.CreateUserParams{Name:   "batchget2", Email:  "batchget2@example.com",
+		user2, _ := createQuery.Eval(ctx, db.CreateUserParams{
+			Name: "batchget2", Email: "batchget2@example.com",
 			Status: db.UserStatusActive,
 		})
 
@@ -303,8 +333,8 @@ func TestQueries(t *testing.T) {
 			user, err := createQuery.Eval(ctx, db.CreateUserParams{
 				Name:   "tx_user",
 				Email:  "tx_user@example.com",
-			Status: db.UserStatusActive,
-		})
+				Status: db.UserStatusActive,
+			})
 			if err != nil {
 				return err
 			}
@@ -315,7 +345,6 @@ func TestQueries(t *testing.T) {
 			_, err = updateQuery.Eval(ctx, user.ID, "tx_user_updated@example.com")
 			return err
 		})
-
 		if err != nil {
 			t.Fatalf("WithTx failed: %v", err)
 		}
@@ -341,8 +370,8 @@ func TestQueries(t *testing.T) {
 			user, err := createQuery.Eval(ctx, db.CreateUserParams{
 				Name:   "tx_rollback",
 				Email:  "tx_rollback@example.com",
-			Status: db.UserStatusActive,
-		})
+				Status: db.UserStatusActive,
+			})
 			if err != nil {
 				return err
 			}
@@ -373,8 +402,8 @@ func TestQueries(t *testing.T) {
 			user1, err := createQuery.Eval(ctx, db.CreateUserParams{
 				Name:   "tx_batch1",
 				Email:  "tx_batch1@example.com",
-			Status: db.UserStatusActive,
-		})
+				Status: db.UserStatusActive,
+			})
 			if err != nil {
 				return err
 			}
@@ -382,8 +411,8 @@ func TestQueries(t *testing.T) {
 			user2, err := createQuery.Eval(ctx, db.CreateUserParams{
 				Name:   "tx_batch2",
 				Email:  "tx_batch2@example.com",
-			Status: db.UserStatusActive,
-		})
+				Status: db.UserStatusActive,
+			})
 			if err != nil {
 				return err
 			}
@@ -403,7 +432,6 @@ func TestQueries(t *testing.T) {
 			_, err = updateQuery.Eval(ctx, user2.ID, "tx_batch2_modified@example.com")
 			return err
 		})
-
 		if err != nil {
 			t.Fatalf("WithTx nested queries failed: %v", err)
 		}

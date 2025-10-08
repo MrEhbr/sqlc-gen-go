@@ -5,22 +5,67 @@ import (
 	"database/sql"
 	"os"
 	"testing"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/sqlc-dev/sqlc-gen-go/examples/stdlib-postgres/db"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestDB(t *testing.T) *sql.DB {
+func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
 
-	databaseURL := getEnv("DATABASE_URL", "")
-	if databaseURL == "" {
-		t.Skip("Skipping test: DATABASE_URL not set")
+	ctx := context.Background()
+
+	// Ensure DOCKER_HOST is set for non-standard Docker setups (Colima, Podman, etc)
+	if os.Getenv("DOCKER_HOST") == "" {
+		// Try Colima socket
+		if _, err := os.Stat(os.Getenv("HOME") + "/.colima/default/docker.sock"); err == nil {
+			os.Setenv("DOCKER_HOST", "unix://"+os.Getenv("HOME")+"/.colima/default/docker.sock")
+		}
 	}
 
-	database, err := sql.Open("postgres", databaseURL)
+	// Disable Ryuk for local development (works better with Colima/Podman)
+	if os.Getenv("TESTCONTAINERS_RYUK_DISABLED") == "" {
+		os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true")
+	}
+
+	pgContainer, err := postgres.Run(ctx,
+		"postgres:16-alpine",
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("postgres"),
+		postgres.WithPassword("password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60*time.Second)),
+	)
 	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
+		t.Fatalf("failed to start postgres container: %v", err)
+	}
+
+	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		t.Fatalf("failed to get connection string: %v", err)
+	}
+
+	// Retry connection a few times (container might not be fully ready)
+	var database *sql.DB
+	for i := 0; i < 10; i++ {
+		database, err = sql.Open("postgres", connStr)
+		if err == nil {
+			// Try a ping to ensure it's really ready
+			if err = database.Ping(); err == nil {
+				break
+			}
+			database.Close()
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		t.Fatalf("failed to connect to database after retries: %v", err)
 	}
 
 	// Create schema
@@ -37,20 +82,20 @@ CREATE TABLE users (
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
-	return database
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+	cleanup := func() {
+		database.Close()
+		if err := pgContainer.Terminate(ctx); err != nil {
+			t.Logf("failed to terminate container: %v", err)
+		}
 	}
-	return defaultValue
+
+	return database, cleanup
 }
 
 func TestQueries(t *testing.T) {
 	ctx := context.Background()
-	database := setupTestDB(t)
-	defer database.Close()
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	executor := db.NewExecutor(database)
 

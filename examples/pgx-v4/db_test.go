@@ -3,25 +3,53 @@ package db_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/sqlc-dev/sqlc-gen-go/examples/pgx-v4/db"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestDB(t *testing.T) *pgxpool.Pool {
+func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
 
-	databaseURL := getEnv("DATABASE_URL", "")
-	if databaseURL == "" {
-		t.Skip("Skipping test: DATABASE_URL not set")
+	ctx := context.Background()
+
+	pgContainer, err := postgres.Run(ctx,
+		"postgres:18-alpine",
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("postgres"),
+		postgres.WithPassword("password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60*time.Second)),
+	)
+	if err != nil {
+		t.Fatalf("failed to start postgres container: %v", err)
 	}
 
-	ctx := context.Background()
-	pool, err := pgxpool.Connect(ctx, databaseURL)
+	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		t.Fatalf("failed to connect to database: %v", err)
+		t.Fatalf("failed to get connection string: %v", err)
+	}
+
+	var pool *pgxpool.Pool
+	for range 10 {
+		pool, err = pgxpool.Connect(ctx, connStr)
+		if err == nil {
+			if err = pool.Ping(ctx); err == nil {
+				break
+			}
+			pool.Close()
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		t.Fatalf("failed to connect to database after retries: %v", err)
 	}
 
 	// Create schema
@@ -38,20 +66,20 @@ CREATE TABLE users (
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
-	return pool
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+	cleanup := func() {
+		pool.Close()
+		if err := pgContainer.Terminate(ctx); err != nil {
+			t.Logf("failed to terminate container: %v", err)
+		}
 	}
-	return defaultValue
+
+	return pool, cleanup
 }
 
 func TestQueries(t *testing.T) {
 	ctx := context.Background()
-	pool := setupTestDB(t)
-	defer pool.Close()
+	pool, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	executor := db.NewExecutor(pool)
 

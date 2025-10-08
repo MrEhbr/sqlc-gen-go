@@ -203,7 +203,6 @@ func TestQueries(t *testing.T) {
 			_, err = updateQuery.Eval(ctx, "tx_user_updated@example.com", user.ID)
 			return err
 		})
-
 		if err != nil {
 			t.Fatalf("WithTx failed: %v", err)
 		}
@@ -279,7 +278,6 @@ func TestQueries(t *testing.T) {
 			_, err = updateQuery.Eval(ctx, "tx_batch2_modified@example.com", user2.ID)
 			return err
 		})
-
 		if err != nil {
 			t.Fatalf("WithTx nested queries failed: %v", err)
 		}
