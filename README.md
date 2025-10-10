@@ -26,7 +26,44 @@ See [Building from source](#building-from-source) and [Configuration Examples](#
 
 ## Usage
 
-### Basic Configuration
+### Installing the Plugin
+
+You can use this plugin either from a GitHub release or by building from source.
+
+#### Using GitHub Releases
+
+Download the latest WASM plugin from the [releases page](https://github.com/MrEhbr/sqlc-gen-go/releases):
+
+```yaml
+version: '2'
+plugins:
+- name: golang
+  wasm:
+    url: https://github.com/MrEhbr/sqlc-gen-go/releases/download/<version>/sqlc-gen-go.wasm
+    sha256: ""  # Get from checksums.txt in the release assets
+sql:
+- schema: schema.sql
+  queries: query.sql
+  engine: postgresql
+  codegen:
+  - plugin: golang
+    out: db
+    options:
+      package: db
+      sql_package: pgx/v5
+```
+
+**Finding the SHA256 checksum:**
+
+1. Go to the [releases page](https://github.com/MrEhbr/sqlc-gen-go/releases)
+2. Download the `checksums.txt` file from the release assets
+3. Copy the SHA256 hash and paste it into your `sqlc.yaml`
+
+The `sha256` field is optional but recommended for better performance (sqlc caches plugins with verified checksums).
+
+#### Using Local Build
+
+If you've built the plugin from source, use a `file://` URL:
 
 ```yaml
 version: '2'
@@ -34,7 +71,7 @@ plugins:
 - name: golang
   wasm:
     url: file:///path/to/bin/sqlc-gen-go.wasm
-    sha256: ""
+    sha256: ""  # Optional for local builds
 sql:
 - schema: schema.sql
   queries: query.sql
@@ -76,6 +113,7 @@ sql:
 ```
 
 This generates:
+
 - `models/models.go` - models in `package models`
 - `db.go` - executor code in `package db`
 - `query.sql.go` - queries in `package db` (imports models package)
@@ -116,6 +154,7 @@ sql:
 ```
 
 This generates:
+
 - `models/models.go` - models in `package models`
 - `db/db.go` - executor code in `package db`
 - `queries/query.sql.gen.go` - queries in `package queries` (imports both models and db packages)
@@ -136,6 +175,7 @@ make all
 ```
 
 This produces:
+
 - `bin/sqlc-gen-go` - Standalone binary plugin
 - `bin/sqlc-gen-go.wasm` - WASM plugin (recommended)
 
@@ -213,10 +253,10 @@ sql:
 ```
 
 The configuration structure is similar, but note:
-* Use a `file://` URL pointing to your built WASM plugin
-* The `sha256` field is optional (leave empty)
-* All the same options work, plus the new options described above
-* **Generated code structure is different** - no `Querier` interface, queries are structs instead
+- Use a `file://` URL pointing to your built WASM plugin
+- The `sha256` field is optional (leave empty)
+- All the same options work, plus the new options described above
+- **Generated code structure is different** - no `Querier` interface, queries are structs instead
 
 ### Global overrides and renames
 
@@ -276,6 +316,7 @@ See the [`examples/`](examples/) directory for working examples with different S
 - **stdlib-postgres** - PostgreSQL with database/sql and lib/pq
 
 Each example includes:
+
 - SQL schema and queries
 - sqlc.yaml configuration
 - Generated code
@@ -283,7 +324,7 @@ Each example includes:
 
 ## Contributing
 
-This is a fork maintained by [@MrEhbr](https://github.com/MrEhbr). Issues and pull requests are welcome at https://github.com/MrEhbr/sqlc-gen-go.
+This is a fork maintained by [@MrEhbr](https://github.com/MrEhbr). Issues and pull requests are welcome at <https://github.com/MrEhbr/sqlc-gen-go>.
 
 ## License
 
