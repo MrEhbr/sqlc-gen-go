@@ -112,6 +112,6 @@ func FuzzOverride(f *testing.F) {
 		o := Override{
 			GoType: GoType{Spec: s},
 		}
-		o.parse(nil)
+		_ = o.parse(nil)
 	})
 }

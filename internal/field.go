@@ -6,8 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sqlc-dev/sqlc-gen-go/internal/opts"
 	"github.com/sqlc-dev/plugin-sdk-go/plugin"
+	"github.com/sqlc-dev/sqlc-gen-go/internal/opts"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type Field struct {
@@ -97,6 +99,7 @@ func toPascalCase(s string) string {
 }
 
 func toCamelInitCase(name string, initUpper bool) string {
+	caser := cases.Title(language.English)
 	out := ""
 	for i, p := range strings.Split(name, "_") {
 		if !initUpper && i == 0 {
@@ -106,13 +109,14 @@ func toCamelInitCase(name string, initUpper bool) string {
 		if p == "id" {
 			out += "ID"
 		} else {
-			out += strings.Title(p)
+			out += caser.String(p)
 		}
 	}
 	return out
 }
 
 func toJsonCamelCase(name string, idUppercase bool) string {
+	caser := cases.Title(language.English)
 	out := ""
 	idStr := "Id"
 
@@ -128,7 +132,7 @@ func toJsonCamelCase(name string, idUppercase bool) string {
 		if p == "id" {
 			out += idStr
 		} else {
-			out += strings.Title(p)
+			out += caser.String(p)
 		}
 	}
 	return out

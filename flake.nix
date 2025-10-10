@@ -20,6 +20,7 @@
             sqlc
             gotools
             golangci-lint
+            git-cliff
           ];
         };
       });

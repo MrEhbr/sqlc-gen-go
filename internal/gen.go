@@ -36,10 +36,10 @@ type tmplCtx struct {
 	EmitEmptySlices     bool
 	EmitEnumValidMethod bool
 	EmitAllEnumValues   bool
-	UsesCopyFrom              bool
-	UsesBatch                 bool
-	OmitSqlcVersion           bool
-	BuildTags                 string
+	UsesCopyFrom        bool
+	UsesBatch           bool
+	OmitSqlcVersion     bool
+	BuildTags           string
 
 	// Package qualifiers for query struct pattern
 	PackageQualifier       string
@@ -156,31 +156,31 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 	}
 
 	tctx := tmplCtx{
-		EmitJSONTags:        options.EmitJsonTags,
-		JsonTagsIDUppercase: options.JsonTagsIdUppercase,
-		EmitDBTags:          options.EmitDbTags,
-		EmitEmptySlices:     options.EmitEmptySlices,
-		EmitEnumValidMethod: options.EmitEnumValidMethod,
-		EmitAllEnumValues:   options.EmitAllEnumValues,
-		UsesCopyFrom:              usesCopyFrom(queries),
-		UsesBatch:                 usesBatch(queries),
-		SQLDriver:                 parseDriver(options.SqlPackage),
-		Q:                         "`",
-		Package:                   options.Package,
-		Enums:                     enums,
-		Structs:                   structs,
-		SqlcVersion:               req.SqlcVersion,
-		BuildTags:                 options.BuildTags,
-		OmitSqlcVersion:           options.OmitSqlcVersion,
-		PackageQualifier:          packageQualifier,
-		ModelsPackageQualifier:    modelsPackageQualifier,
+		EmitJSONTags:           options.EmitJsonTags,
+		JsonTagsIDUppercase:    options.JsonTagsIdUppercase,
+		EmitDBTags:             options.EmitDbTags,
+		EmitEmptySlices:        options.EmitEmptySlices,
+		EmitEnumValidMethod:    options.EmitEnumValidMethod,
+		EmitAllEnumValues:      options.EmitAllEnumValues,
+		UsesCopyFrom:           usesCopyFrom(queries),
+		UsesBatch:              usesBatch(queries),
+		SQLDriver:              parseDriver(options.SqlPackage),
+		Q:                      "`",
+		Package:                options.Package,
+		Enums:                  enums,
+		Structs:                structs,
+		SqlcVersion:            req.SqlcVersion,
+		BuildTags:              options.BuildTags,
+		OmitSqlcVersion:        options.OmitSqlcVersion,
+		PackageQualifier:       packageQualifier,
+		ModelsPackageQualifier: modelsPackageQualifier,
 	}
 
-	if tctx.UsesCopyFrom && !tctx.SQLDriver.IsPGX() && options.SqlDriver != opts.SQLDriverGoSQLDriverMySQL {
+	if tctx.UsesCopyFrom && !tctx.SQLDriver.IsPGX() && options.SqlDriver != string(opts.SQLDriverGoSQLDriverMySQL) {
 		return nil, errors.New(":copyfrom is only supported by pgx and github.com/go-sql-driver/mysql")
 	}
 
-	if tctx.UsesCopyFrom && options.SqlDriver == opts.SQLDriverGoSQLDriverMySQL {
+	if tctx.UsesCopyFrom && options.SqlDriver == string(opts.SQLDriverGoSQLDriverMySQL) {
 		if err := checkNoTimesForMySQLCopyFrom(queries); err != nil {
 			return nil, err
 		}
@@ -228,8 +228,10 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 		tctx.GoQueries = replacedQueries
 		tctx.Package = packageName
 		err := tmpl.ExecuteTemplate(w, templateName, &tctx)
-		w.Flush()
 		if err != nil {
+			return err
+		}
+		if err := w.Flush(); err != nil {
 			return err
 		}
 		code, err := format.Source(b.Bytes())

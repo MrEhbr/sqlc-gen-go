@@ -25,9 +25,9 @@ func validatePackage(sqlPackage string) error {
 
 const (
 	SQLDriverPGXV4            SQLDriver = "github.com/jackc/pgx/v4"
-	SQLDriverPGXV5                      = "github.com/jackc/pgx/v5"
-	SQLDriverLibPQ                      = "github.com/lib/pq"
-	SQLDriverGoSQLDriverMySQL           = "github.com/go-sql-driver/mysql"
+	SQLDriverPGXV5            SQLDriver = "github.com/jackc/pgx/v5"
+	SQLDriverLibPQ            SQLDriver = "github.com/lib/pq"
+	SQLDriverGoSQLDriverMySQL SQLDriver = "github.com/go-sql-driver/mysql"
 )
 
 var validDrivers = map[string]struct{}{

@@ -6,11 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sqlc-dev/sqlc-gen-go/internal/opts"
-	"github.com/sqlc-dev/plugin-sdk-go/sdk"
-	"github.com/sqlc-dev/sqlc-gen-go/internal/inflection"
 	"github.com/sqlc-dev/plugin-sdk-go/metadata"
 	"github.com/sqlc-dev/plugin-sdk-go/plugin"
+	"github.com/sqlc-dev/plugin-sdk-go/sdk"
+	"github.com/sqlc-dev/sqlc-gen-go/internal/inflection"
+	"github.com/sqlc-dev/sqlc-gen-go/internal/opts"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func buildEnums(req *plugin.GenerateRequest, options *opts.Options) []Enum {
@@ -142,9 +144,7 @@ func newGoEmbed(embed *plugin.Identifier, structs []Struct, defaultSchema string
 		}
 
 		fields := make([]Field, len(s.Fields))
-		for i, f := range s.Fields {
-			fields[i] = f
-		}
+		copy(fields, s.Fields)
 
 		return &goEmbed{
 			modelType: s.Type(),
@@ -171,6 +171,7 @@ func paramName(p *plugin.Parameter) string {
 }
 
 func argName(name string) string {
+	caser := cases.Title(language.English)
 	out := ""
 	for i, p := range strings.Split(name, "_") {
 		if i == 0 {
@@ -178,7 +179,7 @@ func argName(name string) string {
 		} else if p == "id" {
 			out += "ID"
 		} else {
-			out += strings.Title(p)
+			out += caser.String(p)
 		}
 	}
 	return out
@@ -270,7 +271,7 @@ func buildQueries(req *plugin.GenerateRequest, options *opts.Options, structs []
 		if len(query.Columns) == 1 && query.Columns[0].EmbedTable == nil {
 			c := query.Columns[0]
 			name := columnName(c, 0)
-			name = strings.Replace(name, "$", "_", -1)
+			name = strings.ReplaceAll(name, "$", "_")
 			gq.Ret = QueryValue{
 				Name:      escape(name),
 				DBName:    name,

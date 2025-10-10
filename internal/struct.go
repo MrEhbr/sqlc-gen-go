@@ -5,8 +5,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/sqlc-dev/sqlc-gen-go/internal/opts"
 	"github.com/sqlc-dev/plugin-sdk-go/plugin"
+	"github.com/sqlc-dev/sqlc-gen-go/internal/opts"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type Struct struct {
@@ -28,6 +30,7 @@ func StructName(name string, options *opts.Options) string {
 	if rename := options.Rename[name]; rename != "" {
 		return rename
 	}
+	caser := cases.Title(language.English)
 	out := ""
 	name = strings.Map(func(r rune) rune {
 		if unicode.IsLetter(r) {
@@ -43,7 +46,7 @@ func StructName(name string, options *opts.Options) string {
 		if _, found := options.InitialismsMap[p]; found {
 			out += strings.ToUpper(p)
 		} else {
-			out += strings.Title(p)
+			out += caser.String(p)
 		}
 	}
 

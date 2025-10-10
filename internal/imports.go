@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sqlc-dev/sqlc-gen-go/internal/opts"
 	"github.com/sqlc-dev/plugin-sdk-go/metadata"
+	"github.com/sqlc-dev/sqlc-gen-go/internal/opts"
 )
 
 type fileImports struct {
@@ -494,7 +494,7 @@ func (i *importer) copyfromImports() fileImports {
 		}
 	}
 
-	if i.Options.SqlDriver == opts.SQLDriverGoSQLDriverMySQL {
+	if i.Options.SqlDriver == string(opts.SQLDriverGoSQLDriverMySQL) {
 		std["io"] = struct{}{}
 		std["fmt"] = struct{}{}
 		std["sync/atomic"] = struct{}{}

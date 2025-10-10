@@ -81,7 +81,7 @@ func (o *Override) parse(req *plugin.GenerateRequest) (err error) {
 	if o.Deprecated_PostgresType != "" {
 		fmt.Fprintf(os.Stderr, "WARNING: \"postgres_type\" is deprecated. Instead, use \"db_type\" to specify a type override.\n")
 		if o.DBType != "" {
-			return fmt.Errorf(`Type override configurations cannot have "db_type" and "postres_type" together. Use "db_type" alone`)
+			return fmt.Errorf(`type override configurations cannot have "db_type" and "postres_type" together. Use "db_type" alone`)
 		}
 		o.DBType = o.Deprecated_PostgresType
 	}
@@ -100,7 +100,7 @@ func (o *Override) parse(req *plugin.GenerateRequest) (err error) {
 	// validate option combinations
 	switch {
 	case o.Column != "" && o.DBType != "":
-		return fmt.Errorf("Override specifying both `column` (%q) and `db_type` (%q) is not valid.", o.Column, o.DBType)
+		return fmt.Errorf("override specifying both `column` (%q) and `db_type` (%q) is not valid", o.Column, o.DBType)
 	case o.Column == "" && o.DBType == "":
 		return fmt.Errorf("Override must specify one of either `column` or `db_type`")
 	}
