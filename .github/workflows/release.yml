@@ -90,11 +90,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Calculated version: $VERSION"
 
-      - name: Create and push tag
-        run: |
-          git tag -a ${{ steps.version.outputs.version }} -m "Release ${{ steps.version.outputs.version }}"
-          git push origin ${{ steps.version.outputs.version }}
-
       - name: Generate release changelog
         uses: orhun/git-cliff-action@v4
         with:
@@ -103,6 +98,11 @@ jobs:
         env:
           OUTPUT: RELEASE_CHANGELOG.md
           GITHUB_REPO: ${{ github.repository }}
+
+      - name: Create and push tag
+        run: |
+          git tag -a ${{ steps.version.outputs.version }} -m "Release ${{ steps.version.outputs.version }}"
+          git push origin ${{ steps.version.outputs.version }}
 
       - name: Restore binaries
         uses: actions/cache/restore@v4
