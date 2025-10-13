@@ -1,7 +1,16 @@
 # sqlc-gen-go
 
+[![Go Version](https://img.shields.io/github/go-mod/go-version/MrEhbr/sqlc-gen-go)](https://go.dev/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/MrEhbr/sqlc-gen-go)](https://github.com/MrEhbr/sqlc-gen-go/releases)
+
+A Go code generator plugin for [sqlc](https://sqlc.dev/) that generates type-safe, composable query structs from SQL.
+
 > [!NOTE]
-> This is a fork of [sqlc-dev/sqlc-gen-go](https://github.com/sqlc-dev/sqlc-gen-go) maintained by [@MrEhbr](https://github.com/MrEhbr) with architectural improvements and additional features.
+> This is a fork of [sqlc-dev/sqlc-gen-go](https://github.com/sqlc-dev/sqlc-gen-go) maintained by [@MrEhbr](https://github.com/MrEhbr) with an alternative query struct pattern and package organization features.
+
+> [!WARNING]
+> **Breaking Changes**: This fork uses a query struct pattern instead of the traditional `Querier` interface. The generated code is **not compatible** with standard sqlc.
 
 ## What's Different
 
@@ -11,6 +20,41 @@ This fork introduces a **query struct pattern** that replaces the traditional `Q
 - **Executor pattern**: Queries implement type-specific interfaces (`QueryOne`, `QueryMany`, `QueryExec`, etc.) and use an executor for database operations
 - **Separate models package**: New option to generate models in a separate package from queries
 - **Flexible file organization**: Control where query files are generated
+
+### Code Comparison
+
+Given this SQL:
+
+```sql
+-- name: GetUser :one
+SELECT * FROM users WHERE id = $1;
+
+-- name: ListUsers :many
+SELECT * FROM users ORDER BY created_at DESC;
+```
+
+**Standard sqlc (interface-based):**
+
+```go
+// All queries in one interface
+type Querier interface {
+    GetUser(ctx context.Context, id int64) (User, error)
+    ListUsers(ctx context.Context) ([]User, error)
+}
+
+// Usage
+q := New(db)
+user, err := q.GetUser(ctx, 1)
+```
+
+**This fork (query struct pattern):**
+
+```go
+// Usage - more flexible
+executor := NewExecutor(db)
+query := NewGetUserQuery(executor)
+user, err := query.Eval(ctx, 1)
+```
 
 ### New Configuration Options
 
@@ -86,9 +130,37 @@ sql:
 
 ## Configuration Examples
 
-### Separate Models Package
+### Basic Setup (Single Package)
 
-Generate models in a separate package from queries:
+```yaml
+version: '2'
+plugins:
+- name: golang
+  wasm:
+    url: file:///path/to/bin/sqlc-gen-go.wasm
+    sha256: ""
+sql:
+- schema: schema.sql
+  queries: query.sql
+  engine: postgresql
+  codegen:
+  - plugin: golang
+    out: db
+    options:
+      package: db
+      sql_package: pgx/v5
+```
+
+**Generated structure:**
+
+```
+db/
+├── db.go           # Executor and database code
+├── models.go       # Table models
+└── query.sql.go    # Query structs and methods
+```
+
+### Separate Models Package
 
 ```yaml
 version: '2'
@@ -112,15 +184,16 @@ sql:
       output_models_file_name: models/models.go
 ```
 
-This generates:
+**Generated structure:**
 
-- `models/models.go` - models in `package models`
-- `db.go` - executor code in `package db`
-- `query.sql.go` - queries in `package db` (imports models package)
+```
+models/
+└── models.go       # Table models (package models)
+db.go               # Executor code (package db)
+query.sql.go        # Query structs (package db, imports models)
+```
 
-### Advanced: Split Packages with Custom File Organization
-
-For maximum flexibility, combine multiple options (see `examples/pgx-split-packages`):
+### Split Packages with Custom File Organization
 
 ```yaml
 version: '2'
@@ -153,33 +226,46 @@ sql:
       output_files_suffix: .gen
 ```
 
-This generates:
+**Generated structure:**
 
-- `models/models.go` - models in `package models`
-- `db/db.go` - executor code in `package db`
-- `queries/query.sql.gen.go` - queries in `package queries` (imports both models and db packages)
+```
+models/
+└── models.go                # Table models (package models)
+db/
+└── db.go                    # Executor code (package db)
+queries/
+└── query.sql.gen.go         # Query structs (package queries, imports models + db)
+```
 
 ## Building from source
 
 ### Requirements
 
-- Go 1.24.0 or later
-- Make
+- Go 1.24 or later
+- [just](https://github.com/casey/just)
 
 ### Build
 
 From the project root:
 
 ```sh
-make all
+just wasm
 ```
 
-This produces:
+This produces `bin/sqlc-gen-go.wasm` - the WASM plugin for sqlc.
 
-- `bin/sqlc-gen-go` - Standalone binary plugin
-- `bin/sqlc-gen-go.wasm` - WASM plugin (recommended)
+**Available commands:**
 
-Both plugins are functionally equivalent. WASM is recommended for better portability and easier configuration.
+```sh
+just --list        # Show all available recipes
+just build         # Build Go packages
+just test          # Run tests
+just test-examples # Run example tests
+just generate      # Generate code for all examples
+just fmt           # Format code
+just lint          # Run linter
+just clean         # Clean build artifacts
+```
 
 To use a local WASM build with sqlc, just update your configuration with a `file://`
 URL pointing at the WASM blob in your `bin` directory:
@@ -195,137 +281,61 @@ plugins:
 As-of sqlc v1.24.0 the `sha256` is optional, but without it sqlc won't cache your
 module internally which will impact performance.
 
-## Migrating from Original sqlc-gen-go
-
-> [!WARNING]
-> This fork uses a different code generation pattern than both the original sqlc-gen-go and sqlc's built-in codegen. The generated code is **not compatible** - you'll need to update your code to use the new query struct pattern.
-
-### From sqlc's Built-in Codegen
-
-Let's say you're generating Go code today using a sqlc.yaml configuration that looks something like this:
-
-```yaml
-version: 2
-sql:
-- schema: "query.sql"
-  queries: "query.sql"
-  engine: "postgresql"
-  gen:
-    go:
-      package: "db"
-      out: "db"
-      emit_json_tags: true
-      emit_pointers_for_null_types: true
-      query_parameter_limit: 5
-      overrides:
-      - column: "authors.id"
-        go_type: "your/package.SomeType"
-      rename:
-        foo: "bar"
-```
-
-To use this fork's WASM plugin, your config will look like this:
-
-```yaml
-version: 2
-plugins:
-- name: golang
-  wasm:
-    url: file:///path/to/bin/sqlc-gen-go.wasm
-    sha256: ""
-sql:
-- schema: "query.sql"
-  queries: "query.sql"
-  engine: "postgresql"
-  codegen:
-  - plugin: golang
-    out: "db"
-    options:
-      package: "db"
-      emit_json_tags: true
-      emit_pointers_for_null_types: true
-      query_parameter_limit: 5
-      overrides:
-      - column: "authors.id"
-        go_type: "your/package.SomeType"
-      rename:
-        foo: "bar"
-```
-
-The configuration structure is similar, but note:
-- Use a `file://` URL pointing to your built WASM plugin
-- The `sha256` field is optional (leave empty)
-- All the same options work, plus the new options described above
-- **Generated code structure is different** - no `Querier` interface, queries are structs instead
-
-### Global overrides and renames
-
-If you have global overrides or renames configured, you’ll need to move those to the new top-level `options` field. Replace the existing `go` field name with the name you gave your plugin in the `plugins` list. We’ve used `"golang"` in this example.
-
-If your existing configuration looks like this:
-
-```yaml
-version: "2"
-overrides:
-  go:
-    rename:
-      id: "Identifier"
-    overrides:
-    - db_type: "timestamptz"
-      nullable: true
-      engine: "postgresql"
-      go_type:
-        import: "gopkg.in/guregu/null.v4"
-        package: "null"
-        type: "Time"
-...
-```
-
-Then your updated configuration would look like this:
-
-```yaml
-version: "2"
-plugins:
-- name: golang
-  wasm:
-    url: file:///path/to/bin/sqlc-gen-go.wasm
-    sha256: ""
-options:
-  golang:
-    rename:
-      id: "Identifier"
-    overrides:
-    - db_type: "timestamptz"
-      nullable: true
-      engine: "postgresql"
-      go_type:
-        import: "gopkg.in/guregu/null.v4"
-        package: "null"
-        type: "Time"
-...
-```
-
 ## Examples
 
-See the [`examples/`](examples/) directory for working examples with different SQL drivers:
-
-- **pgx** - PostgreSQL with pgx/v5
-- **pgx-split-packages** - PostgreSQL with separate models package
-- **mysql** - MySQL with go-sql-driver/mysql
-- **sqlite** - SQLite with modernc.org/sqlite
-- **stdlib-postgres** - PostgreSQL with database/sql and lib/pq
-
-Each example includes:
-
-- SQL schema and queries
-- sqlc.yaml configuration
-- Generated code
-- Tests demonstrating usage
+See the [`examples/`](examples/) directory for working examples with different SQL drivers.
 
 ## Contributing
 
-This is a fork maintained by [@MrEhbr](https://github.com/MrEhbr). Issues and pull requests are welcome at <https://github.com/MrEhbr/sqlc-gen-go>.
+This fork is maintained by [@MrEhbr](https://github.com/MrEhbr). Contributions are welcome!
+
+### Development Workflow
+
+1. **Fork and clone**:
+
+   ```bash
+   git clone https://github.com/YOUR-USERNAME/sqlc-gen-go
+   cd sqlc-gen-go
+   ```
+
+2. **Install dependencies**:
+
+   ```bash
+   go mod download
+   ```
+
+3. **Make changes** and test:
+
+   ```bash
+   just build         # Build Go packages
+   just wasm          # Build WASM plugin
+   just test          # Run tests
+   just test-examples # Test all examples
+   ```
+
+4. **Format and lint**:
+
+   ```bash
+   just fmt  # Format code
+   just lint # Run linter
+   ```
+
+5. **Submit a PR** with:
+   - Clear description of the change
+   - Tests covering new functionality
+   - Updated documentation if needed
+   - Passing CI checks
+
+### Reporting Issues
+
+Please include:
+
+- sqlc version (`sqlc version`)
+- Plugin version or commit hash
+- Minimal reproduction (SQL schema, queries, config)
+- Expected vs actual behavior
+- Error messages and stack traces
 
 ## License
 
-Same as the original sqlc-gen-go project.
+MIT License - see [LICENSE](LICENSE) file for details.
