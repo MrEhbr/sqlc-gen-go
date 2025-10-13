@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.1.2](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.1.1..v0.1.2) - 2025-10-13
+
+### Miscellaneous Chores
+
+- refine release automation to ignore changelog-related changes - ([0e4bc0f](https://github.com/MrEhbr/sqlc-gen-go/commit/0e4bc0f662f85bd72420d0499a6b9d0eea552b29)) - Aleksei Burmistrov
+
+---
 ## [0.1.1](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.1.0..v0.1.1) - 2025-10-13
 
 ### Bug Fixes
@@ -12,10 +19,6 @@ All notable changes to this project will be documented in this file. See [conven
 ### CI/CD
 
 - optimize workflow triggers with path-based filtering - ([7977058](https://github.com/MrEhbr/sqlc-gen-go/commit/7977058784bc2c8ee3e6d9f9d9a690cab742f39e)) - Aleksei Burmistrov
-
-### Miscellaneous Chores
-
-- **(release)** update CHANGELOG.md for v0.1.0 - ([5bc6a94](https://github.com/MrEhbr/sqlc-gen-go/commit/5bc6a94214d727ac0be2ee776c535078c958a9f7)) - github-actions[bot]
 
 ---
 ## [0.1.0] - 2025-10-13
