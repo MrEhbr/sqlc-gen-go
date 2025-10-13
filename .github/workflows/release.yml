@@ -101,7 +101,7 @@ jobs:
 
       - name: Create and push tag
         run: |
-          git tag -a ${{ steps.version.outputs.version }} -m "Release ${{ steps.version.outputs.version }}"
+          git tag -a ${{ steps.version.outputs.version }} -m "${{ steps.version.outputs.version }}"
           git push origin ${{ steps.version.outputs.version }}
 
       - name: Restore binaries

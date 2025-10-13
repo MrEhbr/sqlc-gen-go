@@ -64,6 +64,7 @@ commit_parsers = [
     { message = "^test", group = "Tests" },
     { message = "^ci", group = "CI/CD" },
     { message = "^chore\\(version\\):", skip = true },
+    { message = "^chore\\(release\\): update CHANGELOG", skip = true },
     { message = "^chore", group = "Miscellaneous Chores" },
     { body = ".*security", group = "Security" },
     { message = "^import:", skip = true },
