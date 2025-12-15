@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.2.0](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.1.2..v0.2.0) - 2025-12-15
+
+### Bug Fixes
+
+- **(templates)** support scalar returns in query templates - ([63a1812](https://github.com/MrEhbr/sqlc-gen-go/commit/63a1812f2e96a59a8b1878d9ced1a7257e46662b)) - Aleksei Burmistrov
+
+### Features
+
+- add mock executor support for queries - ([feb3db0](https://github.com/MrEhbr/sqlc-gen-go/commit/feb3db0b1ee62caff00afeccee982cdcf28fb897)) - Aleksei Burmistrov
+
+---
 ## [0.1.2](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.1.1..v0.1.2) - 2025-10-13
 
 ### Miscellaneous Chores
