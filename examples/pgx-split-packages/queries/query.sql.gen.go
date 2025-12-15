@@ -14,6 +14,78 @@ import (
 	"github.com/sqlc-dev/sqlc-gen-go/examples/pgx-split-packages/models"
 )
 
+const countAccounts = `-- name: CountAccounts :one
+SELECT COUNT(*) FROM accounts
+`
+
+type CountAccountsQuery struct {
+	ex     db.QueryExecutor
+	result int64
+}
+
+func (q *CountAccountsQuery) SQL() string {
+	return countAccounts
+}
+
+func (q *CountAccountsQuery) Args() []any {
+	return nil
+}
+
+func (q *CountAccountsQuery) Scan(row pgx.Row) error {
+	return row.Scan(&q.result)
+}
+
+func (q *CountAccountsQuery) Result() int64 {
+	return q.result
+}
+func (q *CountAccountsQuery) Eval(ctx context.Context) (int64, error) {
+	if err := q.ex.Execute(ctx, q); err != nil {
+		var zero int64
+		return zero, err
+	}
+	return q.Result(), nil
+}
+
+func NewCountAccountsQuery(ex db.QueryExecutor) *CountAccountsQuery {
+	return &CountAccountsQuery{ex: ex}
+}
+
+const countPosts = `-- name: CountPosts :one
+SELECT COUNT(*) FROM posts
+`
+
+type CountPostsQuery struct {
+	ex     db.QueryExecutor
+	result int64
+}
+
+func (q *CountPostsQuery) SQL() string {
+	return countPosts
+}
+
+func (q *CountPostsQuery) Args() []any {
+	return nil
+}
+
+func (q *CountPostsQuery) Scan(row pgx.Row) error {
+	return row.Scan(&q.result)
+}
+
+func (q *CountPostsQuery) Result() int64 {
+	return q.result
+}
+func (q *CountPostsQuery) Eval(ctx context.Context) (int64, error) {
+	if err := q.ex.Execute(ctx, q); err != nil {
+		var zero int64
+		return zero, err
+	}
+	return q.Result(), nil
+}
+
+func NewCountPostsQuery(ex db.QueryExecutor) *CountPostsQuery {
+	return &CountPostsQuery{ex: ex}
+}
+
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO accounts (username, email, role, status)
 VALUES ($1, $2, $3, $4)

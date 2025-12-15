@@ -33,3 +33,5 @@ SELECT * FROM users
 WHERE id = $1
 FOR UPDATE;
 
+-- name: CountUsers :one
+SELECT COUNT(*) FROM users;

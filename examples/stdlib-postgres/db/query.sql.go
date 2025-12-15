@@ -10,6 +10,42 @@ import (
 	"database/sql"
 )
 
+const countUsers = `-- name: CountUsers :one
+SELECT COUNT(*) FROM users
+`
+
+type CountUsersQuery struct {
+	ex     QueryExecutor
+	result int64
+}
+
+func (q *CountUsersQuery) SQL() string {
+	return countUsers
+}
+
+func (q *CountUsersQuery) Args() []any {
+	return nil
+}
+
+func (q *CountUsersQuery) Scan(row *sql.Row) error {
+	return row.Scan(&q.result)
+}
+
+func (q *CountUsersQuery) Result() int64 {
+	return q.result
+}
+func (q *CountUsersQuery) Eval(ctx context.Context) (int64, error) {
+	if err := q.ex.Execute(ctx, q); err != nil {
+		var zero int64
+		return zero, err
+	}
+	return q.Result(), nil
+}
+
+func NewCountUsersQuery(ex QueryExecutor) *CountUsersQuery {
+	return &CountUsersQuery{ex: ex}
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email)
 VALUES ($1, $2)

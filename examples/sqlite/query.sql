@@ -28,3 +28,6 @@ WHERE id = ?;
 -- name: CreateUserGetID :execlastid
 INSERT INTO users (name, email)
 VALUES (?, ?);
+
+-- name: CountUsers :one
+SELECT COUNT(*) FROM users;
