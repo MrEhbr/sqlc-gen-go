@@ -11,6 +11,52 @@ import (
 	"github.com/jackc/pgx/v4"
 )
 
+const countUsers = `-- name: CountUsers :one
+SELECT COUNT(*) FROM users
+`
+
+type CountUsersQuery struct {
+	ex     QueryExecutor
+	Result int64
+}
+
+func (q *CountUsersQuery) SQL() string {
+	return countUsers
+}
+
+func (q *CountUsersQuery) Args() []any {
+	return nil
+}
+
+func (q *CountUsersQuery) Scan(row pgx.Row) error {
+	return row.Scan(&q.Result)
+}
+
+func (q *CountUsersQuery) SetResult(result int64) {
+	q.Result = result
+}
+func (q *CountUsersQuery) Eval(ctx context.Context) (int64, error) {
+	if err := q.ex.Execute(ctx, q); err != nil {
+		var zero int64
+		return zero, err
+	}
+	return q.Result, nil
+}
+
+func NewCountUsersQuery(ex QueryExecutor) *CountUsersQuery {
+	return &CountUsersQuery{ex: ex}
+}
+func ExpectCountUsers(result int64, err error) Step {
+	return Step{
+		SQL:  countUsers,
+		Args: nil,
+		Apply: func(q Query) error {
+			q.(*CountUsersQuery).SetResult(result)
+			return err
+		},
+	}
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email)
 VALUES ($1, $2)
@@ -21,7 +67,7 @@ type CreateUserQuery struct {
 	ex     QueryExecutor
 	name   string
 	email  string
-	result User
+	Result User
 }
 
 func (q *CreateUserQuery) SQL() string {
@@ -33,11 +79,11 @@ func (q *CreateUserQuery) Args() []any {
 }
 
 func (q *CreateUserQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result.ID, &q.result.Name, &q.result.Email, &q.result.CreatedAt)
+	return row.Scan(&q.Result.ID, &q.Result.Name, &q.Result.Email, &q.Result.CreatedAt)
 }
 
-func (q *CreateUserQuery) Result() User {
-	return q.result
+func (q *CreateUserQuery) SetResult(result User) {
+	q.Result = result
 }
 func (q *CreateUserQuery) Eval(ctx context.Context, name string, email string) (User, error) {
 	q.name = name
@@ -46,11 +92,21 @@ func (q *CreateUserQuery) Eval(ctx context.Context, name string, email string) (
 		var zero User
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewCreateUserQuery(ex QueryExecutor) *CreateUserQuery {
 	return &CreateUserQuery{ex: ex}
+}
+func ExpectCreateUser(name string, email string, result User, err error) Step {
+	return Step{
+		SQL:  createUser,
+		Args: []any{name, email},
+		Apply: func(q Query) error {
+			q.(*CreateUserQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const deleteUser = `-- name: DeleteUser :exec
@@ -61,7 +117,7 @@ WHERE id = $1
 type DeleteUserQuery struct {
 	ex           QueryExecutor
 	id           int64
-	rowsAffected int64
+	RowsAffected int64
 }
 
 func (q *DeleteUserQuery) SQL() string {
@@ -73,7 +129,7 @@ func (q *DeleteUserQuery) Args() []any {
 }
 
 func (q *DeleteUserQuery) SetRowsAffected(n int64) {
-	q.rowsAffected = n
+	q.RowsAffected = n
 }
 func (q *DeleteUserQuery) Eval(ctx context.Context, id int64) error {
 	q.id = id
@@ -82,6 +138,15 @@ func (q *DeleteUserQuery) Eval(ctx context.Context, id int64) error {
 
 func NewDeleteUserQuery(ex QueryExecutor) *DeleteUserQuery {
 	return &DeleteUserQuery{ex: ex}
+}
+func ExpectDeleteUser(id int64, err error) Step {
+	return Step{
+		SQL:  deleteUser,
+		Args: []any{id},
+		Apply: func(q Query) error {
+			return err
+		},
+	}
 }
 
 const getUser = `-- name: GetUser :one
@@ -92,7 +157,7 @@ WHERE id = $1
 type GetUserQuery struct {
 	ex     QueryExecutor
 	id     int64
-	result User
+	Result User
 }
 
 func (q *GetUserQuery) SQL() string {
@@ -104,11 +169,11 @@ func (q *GetUserQuery) Args() []any {
 }
 
 func (q *GetUserQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result.ID, &q.result.Name, &q.result.Email, &q.result.CreatedAt)
+	return row.Scan(&q.Result.ID, &q.Result.Name, &q.Result.Email, &q.Result.CreatedAt)
 }
 
-func (q *GetUserQuery) Result() User {
-	return q.result
+func (q *GetUserQuery) SetResult(result User) {
+	q.Result = result
 }
 func (q *GetUserQuery) Eval(ctx context.Context, id int64) (User, error) {
 	q.id = id
@@ -116,11 +181,21 @@ func (q *GetUserQuery) Eval(ctx context.Context, id int64) (User, error) {
 		var zero User
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewGetUserQuery(ex QueryExecutor) *GetUserQuery {
 	return &GetUserQuery{ex: ex}
+}
+func ExpectGetUser(id int64, result User, err error) Step {
+	return Step{
+		SQL:  getUser,
+		Args: []any{id},
+		Apply: func(q Query) error {
+			q.(*GetUserQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const getUserForUpdate = `-- name: GetUserForUpdate :one
@@ -132,7 +207,7 @@ FOR UPDATE
 type GetUserForUpdateQuery struct {
 	ex     QueryExecutor
 	id     int64
-	result User
+	Result User
 }
 
 func (q *GetUserForUpdateQuery) SQL() string {
@@ -144,11 +219,11 @@ func (q *GetUserForUpdateQuery) Args() []any {
 }
 
 func (q *GetUserForUpdateQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result.ID, &q.result.Name, &q.result.Email, &q.result.CreatedAt)
+	return row.Scan(&q.Result.ID, &q.Result.Name, &q.Result.Email, &q.Result.CreatedAt)
 }
 
-func (q *GetUserForUpdateQuery) Result() User {
-	return q.result
+func (q *GetUserForUpdateQuery) SetResult(result User) {
+	q.Result = result
 }
 func (q *GetUserForUpdateQuery) Eval(ctx context.Context, id int64) (User, error) {
 	q.id = id
@@ -156,11 +231,21 @@ func (q *GetUserForUpdateQuery) Eval(ctx context.Context, id int64) (User, error
 		var zero User
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewGetUserForUpdateQuery(ex QueryExecutor) *GetUserForUpdateQuery {
 	return &GetUserForUpdateQuery{ex: ex}
+}
+func ExpectGetUserForUpdate(id int64, result User, err error) Step {
+	return Step{
+		SQL:  getUserForUpdate,
+		Args: []any{id},
+		Apply: func(q Query) error {
+			q.(*GetUserForUpdateQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const listUsers = `-- name: ListUsers :many
@@ -170,7 +255,7 @@ ORDER BY created_at DESC
 
 type ListUsersQuery struct {
 	ex      QueryExecutor
-	results []User
+	Results []User
 }
 
 func (q *ListUsersQuery) SQL() string {
@@ -186,24 +271,34 @@ func (q *ListUsersQuery) ScanRow(row pgx.Row) error {
 	if err := row.Scan(&i.ID, &i.Name, &i.Email, &i.CreatedAt); err != nil {
 		return err
 	}
-	q.results = append(q.results, i)
+	q.Results = append(q.Results, i)
 	return nil
 }
 
-func (q *ListUsersQuery) Results() []User {
-	return q.results
+func (q *ListUsersQuery) SetResults(results []User) {
+	q.Results = results
 }
 
 func (q *ListUsersQuery) Eval(ctx context.Context) ([]User, error) {
-	q.results = nil
+	q.Results = nil
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return nil, err
 	}
-	return q.Results(), nil
+	return q.Results, nil
 }
 
 func NewListUsersQuery(ex QueryExecutor) *ListUsersQuery {
 	return &ListUsersQuery{ex: ex}
+}
+func ExpectListUsers(results []User, err error) Step {
+	return Step{
+		SQL:  listUsers,
+		Args: nil,
+		Apply: func(q Query) error {
+			q.(*ListUsersQuery).SetResults(results)
+			return err
+		},
+	}
 }
 
 const updateUserEmail = `-- name: UpdateUserEmail :execrows
@@ -216,7 +311,7 @@ type UpdateUserEmailQuery struct {
 	ex           QueryExecutor
 	iD           int64
 	email        string
-	rowsAffected int64
+	RowsAffected int64
 }
 
 func (q *UpdateUserEmailQuery) SQL() string {
@@ -228,7 +323,7 @@ func (q *UpdateUserEmailQuery) Args() []any {
 }
 
 func (q *UpdateUserEmailQuery) SetRowsAffected(n int64) {
-	q.rowsAffected = n
+	q.RowsAffected = n
 }
 
 func (q *UpdateUserEmailQuery) Eval(ctx context.Context, iD int64, email string) (int64, error) {
@@ -237,9 +332,19 @@ func (q *UpdateUserEmailQuery) Eval(ctx context.Context, iD int64, email string)
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return 0, err
 	}
-	return q.rowsAffected, nil
+	return q.RowsAffected, nil
 }
 
 func NewUpdateUserEmailQuery(ex QueryExecutor) *UpdateUserEmailQuery {
 	return &UpdateUserEmailQuery{ex: ex}
+}
+func ExpectUpdateUserEmail(iD int64, email string, rowsAffected int64, err error) Step {
+	return Step{
+		SQL:  updateUserEmail,
+		Args: []any{iD, email},
+		Apply: func(q Query) error {
+			q.(*UpdateUserEmailQuery).SetRowsAffected(rowsAffected)
+			return err
+		},
+	}
 }

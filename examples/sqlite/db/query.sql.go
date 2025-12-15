@@ -10,6 +10,56 @@ import (
 	"database/sql"
 )
 
+const countUsers = `-- name: CountUsers :one
+SELECT COUNT(*) FROM users
+`
+
+type CountUsersQuery struct {
+	ex     QueryExecutor
+	result int64
+}
+
+func (q *CountUsersQuery) SQL() string {
+	return countUsers
+}
+
+func (q *CountUsersQuery) Args() []any {
+	return nil
+}
+
+func (q *CountUsersQuery) Scan(row *sql.Row) error {
+	return row.Scan(&q.result)
+}
+
+func (q *CountUsersQuery) Result() int64 {
+	return q.result
+}
+
+func (q *CountUsersQuery) SetResult(result int64) {
+	q.result = result
+}
+func (q *CountUsersQuery) Eval(ctx context.Context) (int64, error) {
+	if err := q.ex.Execute(ctx, q); err != nil {
+		var zero int64
+		return zero, err
+	}
+	return q.Result(), nil
+}
+
+func NewCountUsersQuery(ex QueryExecutor) *CountUsersQuery {
+	return &CountUsersQuery{ex: ex}
+}
+func ExpectCountUsers(result int64, err error) Step {
+	return Step{
+		SQL:  countUsers,
+		Args: nil,
+		Apply: func(q Query) error {
+			q.(*CountUsersQuery).SetResult(result)
+			return err
+		},
+	}
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email)
 VALUES (?, ?)
@@ -38,6 +88,10 @@ func (q *CreateUserQuery) Scan(row *sql.Row) error {
 func (q *CreateUserQuery) Result() User {
 	return q.result
 }
+
+func (q *CreateUserQuery) SetResult(result User) {
+	q.result = result
+}
 func (q *CreateUserQuery) Eval(ctx context.Context, name string, email string) (User, error) {
 	q.name = name
 	q.email = email
@@ -50,6 +104,16 @@ func (q *CreateUserQuery) Eval(ctx context.Context, name string, email string) (
 
 func NewCreateUserQuery(ex QueryExecutor) *CreateUserQuery {
 	return &CreateUserQuery{ex: ex}
+}
+func ExpectCreateUser(name string, email string, result User, err error) Step {
+	return Step{
+		SQL:  createUser,
+		Args: []any{name, email},
+		Apply: func(q Query) error {
+			q.(*CreateUserQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const createUserGetID = `-- name: CreateUserGetID :execlastid
@@ -92,6 +156,16 @@ func (q *CreateUserGetIDQuery) Eval(ctx context.Context, name string, email stri
 func NewCreateUserGetIDQuery(ex QueryExecutor) *CreateUserGetIDQuery {
 	return &CreateUserGetIDQuery{ex: ex}
 }
+func ExpectCreateUserGetID(name string, email string, lastID int64, err error) Step {
+	return Step{
+		SQL:  createUserGetID,
+		Args: []any{name, email},
+		Apply: func(q Query) error {
+			q.(*CreateUserGetIDQuery).SetLastInsertID(lastID)
+			return err
+		},
+	}
+}
 
 const deleteUser = `-- name: DeleteUser :exec
 DELETE FROM users
@@ -123,6 +197,15 @@ func (q *DeleteUserQuery) Eval(ctx context.Context, id int64) error {
 func NewDeleteUserQuery(ex QueryExecutor) *DeleteUserQuery {
 	return &DeleteUserQuery{ex: ex}
 }
+func ExpectDeleteUser(id int64, err error) Step {
+	return Step{
+		SQL:  deleteUser,
+		Args: []any{id},
+		Apply: func(q Query) error {
+			return err
+		},
+	}
+}
 
 const getUser = `-- name: GetUser :one
 SELECT id, name, email, created_at FROM users
@@ -150,6 +233,10 @@ func (q *GetUserQuery) Scan(row *sql.Row) error {
 func (q *GetUserQuery) Result() User {
 	return q.result
 }
+
+func (q *GetUserQuery) SetResult(result User) {
+	q.result = result
+}
 func (q *GetUserQuery) Eval(ctx context.Context, id int64) (User, error) {
 	q.id = id
 	if err := q.ex.Execute(ctx, q); err != nil {
@@ -161,6 +248,16 @@ func (q *GetUserQuery) Eval(ctx context.Context, id int64) (User, error) {
 
 func NewGetUserQuery(ex QueryExecutor) *GetUserQuery {
 	return &GetUserQuery{ex: ex}
+}
+func ExpectGetUser(id int64, result User, err error) Step {
+	return Step{
+		SQL:  getUser,
+		Args: []any{id},
+		Apply: func(q Query) error {
+			q.(*GetUserQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const listUsers = `-- name: ListUsers :many
@@ -193,6 +290,10 @@ func (q *ListUsersQuery) ScanRow(row *sql.Rows) error {
 func (q *ListUsersQuery) Results() []User {
 	return q.results
 }
+
+func (q *ListUsersQuery) SetResults(results []User) {
+	q.results = results
+}
 func (q *ListUsersQuery) Eval(ctx context.Context) ([]User, error) {
 	q.results = nil
 	if err := q.ex.Execute(ctx, q); err != nil {
@@ -203,6 +304,16 @@ func (q *ListUsersQuery) Eval(ctx context.Context) ([]User, error) {
 
 func NewListUsersQuery(ex QueryExecutor) *ListUsersQuery {
 	return &ListUsersQuery{ex: ex}
+}
+func ExpectListUsers(results []User, err error) Step {
+	return Step{
+		SQL:  listUsers,
+		Args: nil,
+		Apply: func(q Query) error {
+			q.(*ListUsersQuery).SetResults(results)
+			return err
+		},
+	}
 }
 
 const updateUserEmail = `-- name: UpdateUserEmail :execrows
@@ -240,6 +351,16 @@ func (q *UpdateUserEmailQuery) Eval(ctx context.Context, email string, iD int64)
 
 func NewUpdateUserEmailQuery(ex QueryExecutor) *UpdateUserEmailQuery {
 	return &UpdateUserEmailQuery{ex: ex}
+}
+func ExpectUpdateUserEmail(email string, iD int64, rowsAffected int64, err error) Step {
+	return Step{
+		SQL:  updateUserEmail,
+		Args: []any{email, iD},
+		Apply: func(q Query) error {
+			q.(*UpdateUserEmailQuery).SetRowsAffected(rowsAffected)
+			return err
+		},
+	}
 }
 
 const updateUserName = `-- name: UpdateUserName :execresult

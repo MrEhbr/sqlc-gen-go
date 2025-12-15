@@ -36,6 +36,7 @@ type tmplCtx struct {
 	EmitEmptySlices     bool
 	EmitEnumValidMethod bool
 	EmitAllEnumValues   bool
+	EmitMockExecutor    bool
 	UsesCopyFrom        bool
 	UsesBatch           bool
 	OmitSqlcVersion     bool
@@ -162,6 +163,7 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 		EmitEmptySlices:        options.EmitEmptySlices,
 		EmitEnumValidMethod:    options.EmitEnumValidMethod,
 		EmitAllEnumValues:      options.EmitAllEnumValues,
+		EmitMockExecutor:       options.EmitMockExecutor,
 		UsesCopyFrom:           usesCopyFrom(queries),
 		UsesBatch:              usesBatch(queries),
 		SQLDriver:              parseDriver(options.SqlPackage),

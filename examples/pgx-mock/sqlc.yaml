@@ -1,0 +1,16 @@
+version: "2"
+plugins:
+  - name: sqlc-gen-go
+    wasm:
+      url: file://../../bin/sqlc-gen-go.wasm
+sql:
+  - schema: schema.sql
+    queries: query.sql
+    engine: postgresql
+    codegen:
+      - plugin: sqlc-gen-go
+        out: db
+        options:
+          package: db
+          sql_package: pgx/v5
+          emit_mock_executor: true

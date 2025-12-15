@@ -50,3 +50,9 @@ RETURNING *;
 UPDATE posts
 SET published = true
 WHERE id = $1 AND published = false;
+
+-- name: CountAccounts :one
+SELECT COUNT(*) FROM accounts;
+
+-- name: CountPosts :one
+SELECT COUNT(*) FROM posts;

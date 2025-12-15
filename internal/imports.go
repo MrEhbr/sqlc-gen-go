@@ -130,11 +130,23 @@ func (i *importer) dbImports() fileImports {
 	case opts.SQLDriverPGXV4:
 		pkg = append(pkg, ImportSpec{Path: "github.com/jackc/pgconn"})
 		pkg = append(pkg, ImportSpec{Path: "github.com/jackc/pgx/v4"})
+		if i.Options.EmitMockExecutor {
+			// reflect is used by StubExecutor for argument comparison
+			std = append(std, ImportSpec{Path: "reflect"})
+		}
 	case opts.SQLDriverPGXV5:
 		pkg = append(pkg, ImportSpec{Path: "github.com/jackc/pgx/v5/pgconn"})
 		pkg = append(pkg, ImportSpec{Path: "github.com/jackc/pgx/v5"})
+		if i.Options.EmitMockExecutor {
+			// reflect is used by StubExecutor for argument comparison
+			std = append(std, ImportSpec{Path: "reflect"})
+		}
 	default:
 		std = append(std, ImportSpec{Path: "database/sql"})
+		if i.Options.EmitMockExecutor {
+			// reflect is used by StubExecutor for argument comparison
+			std = append(std, ImportSpec{Path: "reflect"})
+		}
 	}
 
 	sort.Slice(std, func(i, j int) bool { return std[i].Path < std[j].Path })

@@ -44,3 +44,6 @@ WHERE email LIKE $1;
 
 -- name: BulkInsertUsers :copyfrom
 INSERT INTO users (name, email) VALUES ($1, $2);
+
+-- name: CountUsers :one
+SELECT COUNT(*) FROM users;

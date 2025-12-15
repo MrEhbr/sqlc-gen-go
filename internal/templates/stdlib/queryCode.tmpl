@@ -56,7 +56,11 @@ func (q *{{.MethodName}}Query) Args() []any {
 }
 
 func (q *{{.MethodName}}Query) Scan(row *sql.Row) error {
+	{{- if .Ret.IsStruct}}
 	return row.Scan({{range $i, $f := .Ret.Struct.Fields}}{{if $i}}, {{end}}&q.result.{{$f.Name}}{{end}})
+	{{- else}}
+	return row.Scan(&q.result)
+	{{- end}}
 }
 
 func (q *{{.MethodName}}Query) Result() {{.Ret.DefineType}} {
@@ -64,6 +68,14 @@ func (q *{{.MethodName}}Query) Result() {{.Ret.DefineType}} {
 	return &q.result
 	{{- else}}
 	return q.result
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetResult(result {{.Ret.DefineType}}) {
+	{{- if .Ret.IsPointer}}
+	q.result = *result
+	{{- else}}
+	q.result = result
 	{{- end}}
 }
 
@@ -103,6 +115,38 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context) ({{.Ret.DefineType}}, e
 func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
+
+{{- if $.EmitMockExecutor}}
+
+{{- if .Arg.Pair}}
+func Expect{{.MethodName}}({{.Arg.Pair}}, result {{.Ret.DefineType}}, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.EmitStruct}}
+		{{- $argName := .Arg.Name}}
+		Args: []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}{{$argName}}.{{$f.Name}}{{end}} },
+		{{- else}}
+		Args: []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}{{$p.Name}}{{end}} },
+		{{- end}}
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			q.(*{{.MethodName}}Query).SetResult(result)
+			return err
+		},
+	}
+}
+{{- else}}
+func Expect{{.MethodName}}(result {{.Ret.DefineType}}, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		Args: nil,
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			q.(*{{.MethodName}}Query).SetResult(result)
+			return err
+		},
+	}
+}
+{{- end}}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":many"}}
@@ -140,9 +184,15 @@ func (q *{{.MethodName}}Query) Args() []any {
 func (q *{{.MethodName}}Query) ScanRow(row *sql.Rows) error {
 	{{- $retName := .Ret.Name}}
 	var {{$retName}} {{.Ret.Type}}
+	{{- if .Ret.IsStruct}}
 	if err := row.Scan({{range $i, $f := .Ret.Struct.Fields}}{{if $i}}, {{end}}&{{$retName}}.{{$f.Name}}{{end}}); err != nil {
 		return err
 	}
+	{{- else}}
+	if err := row.Scan(&{{$retName}}); err != nil {
+		return err
+	}
+	{{- end}}
 	q.results = append(q.results, {{.Ret.ReturnName}})
 	return nil
 }
@@ -160,6 +210,21 @@ func (q *{{.MethodName}}Query) Results() []{{.Ret.DefineType}} {
 		{{- end}}
 	}
 	return results
+	{{- end}}
+}
+
+func (q *{{.MethodName}}Query) SetResults(results []{{.Ret.DefineType}}) {
+	{{- if eq .Ret.Type .Ret.DefineType}}
+	q.results = results
+	{{- else}}
+	q.results = make([]{{.Ret.Type}}, len(results))
+	for i, r := range results {
+		{{- if .Ret.IsPointer}}
+		q.results[i] = *r
+		{{- else}}
+		q.results[i] = r
+		{{- end}}
+	}
 	{{- end}}
 }
 
@@ -191,6 +256,38 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context) ([]{{.Ret.DefineType}},
 func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
+
+{{- if $.EmitMockExecutor}}
+
+{{- if .Arg.Pair}}
+func Expect{{.MethodName}}({{.Arg.Pair}}, results []{{.Ret.DefineType}}, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.EmitStruct}}
+		{{- $argName := .Arg.Name}}
+		Args: []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}{{$argName}}.{{$f.Name}}{{end}} },
+		{{- else}}
+		Args: []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}{{$p.Name}}{{end}} },
+		{{- end}}
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			q.(*{{.MethodName}}Query).SetResults(results)
+			return err
+		},
+	}
+}
+{{- else}}
+func Expect{{.MethodName}}(results []{{.Ret.DefineType}}, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		Args: nil,
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			q.(*{{.MethodName}}Query).SetResults(results)
+			return err
+		},
+	}
+}
+{{- end}}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":exec"}}
@@ -249,6 +346,36 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context) error {
 func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
+
+{{- if $.EmitMockExecutor}}
+
+{{- if .Arg.Pair}}
+func Expect{{.MethodName}}({{.Arg.Pair}}, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.EmitStruct}}
+		{{- $argName := .Arg.Name}}
+		Args: []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}{{$argName}}.{{$f.Name}}{{end}} },
+		{{- else}}
+		Args: []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}{{$p.Name}}{{end}} },
+		{{- end}}
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			return err
+		},
+	}
+}
+{{- else}}
+func Expect{{.MethodName}}(err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		Args: nil,
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			return err
+		},
+	}
+}
+{{- end}}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":execrows"}}
@@ -313,6 +440,38 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context) (int64, error) {
 func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
+
+{{- if $.EmitMockExecutor}}
+
+{{- if .Arg.Pair}}
+func Expect{{.MethodName}}({{.Arg.Pair}}, rowsAffected int64, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.EmitStruct}}
+		{{- $argName := .Arg.Name}}
+		Args: []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}{{$argName}}.{{$f.Name}}{{end}} },
+		{{- else}}
+		Args: []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}{{$p.Name}}{{end}} },
+		{{- end}}
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			q.(*{{.MethodName}}Query).SetRowsAffected(rowsAffected)
+			return err
+		},
+	}
+}
+{{- else}}
+func Expect{{.MethodName}}(rowsAffected int64, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		Args: nil,
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			q.(*{{.MethodName}}Query).SetRowsAffected(rowsAffected)
+			return err
+		},
+	}
+}
+{{- end}}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":execresult"}}
@@ -418,6 +577,38 @@ func (q *{{.MethodName}}Query) Eval(ctx context.Context) (int64, error) {
 func New{{.MethodName}}Query(ex {{$.PackageQualifier}}QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
+
+{{- if $.EmitMockExecutor}}
+
+{{- if .Arg.Pair}}
+func Expect{{.MethodName}}({{.Arg.Pair}}, lastID int64, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.EmitStruct}}
+		{{- $argName := .Arg.Name}}
+		Args: []any{ {{range $i, $f := .Arg.UniqueFields}}{{if $i}}, {{end}}{{$argName}}.{{$f.Name}}{{end}} },
+		{{- else}}
+		Args: []any{ {{range $i, $p := .Arg.Pairs}}{{if $i}}, {{end}}{{$p.Name}}{{end}} },
+		{{- end}}
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			q.(*{{.MethodName}}Query).SetLastInsertID(lastID)
+			return err
+		},
+	}
+}
+{{- else}}
+func Expect{{.MethodName}}(lastID int64, err error) {{$.PackageQualifier}}Step {
+	return {{$.PackageQualifier}}Step{
+		SQL:  {{.ConstantName}},
+		Args: nil,
+		Apply: func(q {{$.PackageQualifier}}Query) error {
+			q.(*{{.MethodName}}Query).SetLastInsertID(lastID)
+			return err
+		},
+	}
+}
+{{- end}}
+{{- end}}
 {{end}}
 
 
