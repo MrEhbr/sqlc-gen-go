@@ -26,6 +26,7 @@ sql:
         emit_all_enum_values: true # working
         emit_sql_as_comment: false # working
         query_parameter_limit: 2
+        emit_mock_executor: true
 
 
 

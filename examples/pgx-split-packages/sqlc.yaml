@@ -25,3 +25,4 @@ sql:
         db_package_import_path: github.com/sqlc-dev/sqlc-gen-go/examples/pgx-split-packages/db
         output_files_suffix: .gen
         query_parameter_limit: 2
+        emit_mock_executor: true

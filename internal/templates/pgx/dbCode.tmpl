@@ -133,4 +133,66 @@ var (
 	_ DBTX = (*pgx.Conn)(nil)
 	_ DBTX = (pgx.Tx)(nil)
 )
+
+{{- if $.EmitMockExecutor}}
+
+type Step struct {
+	SQL   string
+	Args  []any
+	Apply func(Query) error
+}
+
+// StubExecutor verifies queries are executed in expected order with expected arguments.
+type StubExecutor struct {
+	t     interface {
+		Helper()
+		Errorf(format string, args ...any)
+	}
+	steps []Step
+	i     int
+}
+
+func NewStubExecutor(t interface {
+	Helper()
+	Errorf(format string, args ...any)
+}, steps ...Step) *StubExecutor {
+	return &StubExecutor{t: t, steps: steps}
+}
+
+func (s *StubExecutor) Execute(ctx context.Context, q Query) error {
+	s.t.Helper()
+
+	if s.i >= len(s.steps) {
+		s.t.Errorf("unexpected query: SQL=%q Args=%v", q.SQL(), q.Args())
+		return fmt.Errorf("unexpected query")
+	}
+
+	step := s.steps[s.i]
+	s.i++
+
+	if q.SQL() != step.SQL {
+		s.t.Errorf("SQL mismatch at step %d:\nwant: %q\ngot:  %q", s.i, step.SQL, q.SQL())
+		return fmt.Errorf("SQL mismatch")
+	}
+
+	if !reflect.DeepEqual(q.Args(), step.Args) {
+		s.t.Errorf("Args mismatch at step %d:\nwant: %v\ngot:  %v", s.i, step.Args, q.Args())
+		return fmt.Errorf("args mismatch")
+	}
+
+	if step.Apply != nil {
+		return step.Apply(q)
+	}
+	return nil
+}
+
+func (s *StubExecutor) AssertDone() {
+	s.t.Helper()
+	if s.i != len(s.steps) {
+		s.t.Errorf("not all steps executed: %d/%d", s.i, len(s.steps))
+	}
+}
+
+var _ QueryExecutor = (*StubExecutor)(nil)
+{{- end}}
 {{end}}

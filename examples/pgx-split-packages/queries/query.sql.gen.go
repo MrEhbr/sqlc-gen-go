@@ -20,7 +20,7 @@ SELECT COUNT(*) FROM accounts
 
 type CountAccountsQuery struct {
 	ex     db.QueryExecutor
-	result int64
+	Result int64
 }
 
 func (q *CountAccountsQuery) SQL() string {
@@ -32,22 +32,32 @@ func (q *CountAccountsQuery) Args() []any {
 }
 
 func (q *CountAccountsQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result)
+	return row.Scan(&q.Result)
 }
 
-func (q *CountAccountsQuery) Result() int64 {
-	return q.result
+func (q *CountAccountsQuery) SetResult(result int64) {
+	q.Result = result
 }
 func (q *CountAccountsQuery) Eval(ctx context.Context) (int64, error) {
 	if err := q.ex.Execute(ctx, q); err != nil {
 		var zero int64
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewCountAccountsQuery(ex db.QueryExecutor) *CountAccountsQuery {
 	return &CountAccountsQuery{ex: ex}
+}
+func ExpectCountAccounts(result int64, err error) db.Step {
+	return db.Step{
+		SQL:  countAccounts,
+		Args: nil,
+		Apply: func(q db.Query) error {
+			q.(*CountAccountsQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const countPosts = `-- name: CountPosts :one
@@ -56,7 +66,7 @@ SELECT COUNT(*) FROM posts
 
 type CountPostsQuery struct {
 	ex     db.QueryExecutor
-	result int64
+	Result int64
 }
 
 func (q *CountPostsQuery) SQL() string {
@@ -68,22 +78,32 @@ func (q *CountPostsQuery) Args() []any {
 }
 
 func (q *CountPostsQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result)
+	return row.Scan(&q.Result)
 }
 
-func (q *CountPostsQuery) Result() int64 {
-	return q.result
+func (q *CountPostsQuery) SetResult(result int64) {
+	q.Result = result
 }
 func (q *CountPostsQuery) Eval(ctx context.Context) (int64, error) {
 	if err := q.ex.Execute(ctx, q); err != nil {
 		var zero int64
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewCountPostsQuery(ex db.QueryExecutor) *CountPostsQuery {
 	return &CountPostsQuery{ex: ex}
+}
+func ExpectCountPosts(result int64, err error) db.Step {
+	return db.Step{
+		SQL:  countPosts,
+		Args: nil,
+		Apply: func(q db.Query) error {
+			q.(*CountPostsQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const createAccount = `-- name: CreateAccount :one
@@ -102,7 +122,7 @@ type CreateAccountParams struct {
 type CreateAccountQuery struct {
 	ex     db.QueryExecutor
 	arg    CreateAccountParams
-	result models.Account
+	Result models.Account
 }
 
 func (q *CreateAccountQuery) SQL() string {
@@ -114,11 +134,11 @@ func (q *CreateAccountQuery) Args() []any {
 }
 
 func (q *CreateAccountQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result.ID, &q.result.Username, &q.result.Email, &q.result.Role, &q.result.Status, &q.result.CreatedAt, &q.result.UpdatedAt)
+	return row.Scan(&q.Result.ID, &q.Result.Username, &q.Result.Email, &q.Result.Role, &q.Result.Status, &q.Result.CreatedAt, &q.Result.UpdatedAt)
 }
 
-func (q *CreateAccountQuery) Result() models.Account {
-	return q.result
+func (q *CreateAccountQuery) SetResult(result models.Account) {
+	q.Result = result
 }
 func (q *CreateAccountQuery) Eval(ctx context.Context, arg CreateAccountParams) (models.Account, error) {
 	q.arg = arg
@@ -126,11 +146,21 @@ func (q *CreateAccountQuery) Eval(ctx context.Context, arg CreateAccountParams) 
 		var zero models.Account
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewCreateAccountQuery(ex db.QueryExecutor) *CreateAccountQuery {
 	return &CreateAccountQuery{ex: ex}
+}
+func ExpectCreateAccount(arg CreateAccountParams, result models.Account, err error) db.Step {
+	return db.Step{
+		SQL:  createAccount,
+		Args: []any{arg.Username, arg.Email, arg.Role, arg.Status},
+		Apply: func(q db.Query) error {
+			q.(*CreateAccountQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const createPost = `-- name: CreatePost :one
@@ -149,7 +179,7 @@ type CreatePostParams struct {
 type CreatePostQuery struct {
 	ex     db.QueryExecutor
 	arg    CreatePostParams
-	result models.Post
+	Result models.Post
 }
 
 func (q *CreatePostQuery) SQL() string {
@@ -161,11 +191,11 @@ func (q *CreatePostQuery) Args() []any {
 }
 
 func (q *CreatePostQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result.ID, &q.result.AccountID, &q.result.Title, &q.result.Content, &q.result.Published, &q.result.CreatedAt)
+	return row.Scan(&q.Result.ID, &q.Result.AccountID, &q.Result.Title, &q.Result.Content, &q.Result.Published, &q.Result.CreatedAt)
 }
 
-func (q *CreatePostQuery) Result() models.Post {
-	return q.result
+func (q *CreatePostQuery) SetResult(result models.Post) {
+	q.Result = result
 }
 func (q *CreatePostQuery) Eval(ctx context.Context, arg CreatePostParams) (models.Post, error) {
 	q.arg = arg
@@ -173,11 +203,21 @@ func (q *CreatePostQuery) Eval(ctx context.Context, arg CreatePostParams) (model
 		var zero models.Post
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewCreatePostQuery(ex db.QueryExecutor) *CreatePostQuery {
 	return &CreatePostQuery{ex: ex}
+}
+func ExpectCreatePost(arg CreatePostParams, result models.Post, err error) db.Step {
+	return db.Step{
+		SQL:  createPost,
+		Args: []any{arg.AccountID, arg.Title, arg.Content, arg.Published},
+		Apply: func(q db.Query) error {
+			q.(*CreatePostQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const deleteAccount = `-- name: DeleteAccount :exec
@@ -188,7 +228,7 @@ WHERE id = $1
 type DeleteAccountQuery struct {
 	ex           db.QueryExecutor
 	id           int64
-	rowsAffected int64
+	RowsAffected int64
 }
 
 func (q *DeleteAccountQuery) SQL() string {
@@ -200,7 +240,7 @@ func (q *DeleteAccountQuery) Args() []any {
 }
 
 func (q *DeleteAccountQuery) SetRowsAffected(n int64) {
-	q.rowsAffected = n
+	q.RowsAffected = n
 }
 func (q *DeleteAccountQuery) Eval(ctx context.Context, id int64) error {
 	q.id = id
@@ -209,6 +249,15 @@ func (q *DeleteAccountQuery) Eval(ctx context.Context, id int64) error {
 
 func NewDeleteAccountQuery(ex db.QueryExecutor) *DeleteAccountQuery {
 	return &DeleteAccountQuery{ex: ex}
+}
+func ExpectDeleteAccount(id int64, err error) db.Step {
+	return db.Step{
+		SQL:  deleteAccount,
+		Args: []any{id},
+		Apply: func(q db.Query) error {
+			return err
+		},
+	}
 }
 
 const getAccount = `-- name: GetAccount :one
@@ -219,7 +268,7 @@ WHERE id = $1
 type GetAccountQuery struct {
 	ex     db.QueryExecutor
 	id     int64
-	result models.Account
+	Result models.Account
 }
 
 func (q *GetAccountQuery) SQL() string {
@@ -231,11 +280,11 @@ func (q *GetAccountQuery) Args() []any {
 }
 
 func (q *GetAccountQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result.ID, &q.result.Username, &q.result.Email, &q.result.Role, &q.result.Status, &q.result.CreatedAt, &q.result.UpdatedAt)
+	return row.Scan(&q.Result.ID, &q.Result.Username, &q.Result.Email, &q.Result.Role, &q.Result.Status, &q.Result.CreatedAt, &q.Result.UpdatedAt)
 }
 
-func (q *GetAccountQuery) Result() models.Account {
-	return q.result
+func (q *GetAccountQuery) SetResult(result models.Account) {
+	q.Result = result
 }
 func (q *GetAccountQuery) Eval(ctx context.Context, id int64) (models.Account, error) {
 	q.id = id
@@ -243,11 +292,21 @@ func (q *GetAccountQuery) Eval(ctx context.Context, id int64) (models.Account, e
 		var zero models.Account
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewGetAccountQuery(ex db.QueryExecutor) *GetAccountQuery {
 	return &GetAccountQuery{ex: ex}
+}
+func ExpectGetAccount(id int64, result models.Account, err error) db.Step {
+	return db.Step{
+		SQL:  getAccount,
+		Args: []any{id},
+		Apply: func(q db.Query) error {
+			q.(*GetAccountQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const getAccountByUsername = `-- name: GetAccountByUsername :one
@@ -258,7 +317,7 @@ WHERE username = $1
 type GetAccountByUsernameQuery struct {
 	ex       db.QueryExecutor
 	username string
-	result   models.Account
+	Result   models.Account
 }
 
 func (q *GetAccountByUsernameQuery) SQL() string {
@@ -270,11 +329,11 @@ func (q *GetAccountByUsernameQuery) Args() []any {
 }
 
 func (q *GetAccountByUsernameQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result.ID, &q.result.Username, &q.result.Email, &q.result.Role, &q.result.Status, &q.result.CreatedAt, &q.result.UpdatedAt)
+	return row.Scan(&q.Result.ID, &q.Result.Username, &q.Result.Email, &q.Result.Role, &q.Result.Status, &q.Result.CreatedAt, &q.Result.UpdatedAt)
 }
 
-func (q *GetAccountByUsernameQuery) Result() models.Account {
-	return q.result
+func (q *GetAccountByUsernameQuery) SetResult(result models.Account) {
+	q.Result = result
 }
 func (q *GetAccountByUsernameQuery) Eval(ctx context.Context, username string) (models.Account, error) {
 	q.username = username
@@ -282,11 +341,21 @@ func (q *GetAccountByUsernameQuery) Eval(ctx context.Context, username string) (
 		var zero models.Account
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewGetAccountByUsernameQuery(ex db.QueryExecutor) *GetAccountByUsernameQuery {
 	return &GetAccountByUsernameQuery{ex: ex}
+}
+func ExpectGetAccountByUsername(username string, result models.Account, err error) db.Step {
+	return db.Step{
+		SQL:  getAccountByUsername,
+		Args: []any{username},
+		Apply: func(q db.Query) error {
+			q.(*GetAccountByUsernameQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const getPost = `-- name: GetPost :one
@@ -310,7 +379,7 @@ type GetPostRow struct {
 type GetPostQuery struct {
 	ex     db.QueryExecutor
 	id     int64
-	result GetPostRow
+	Result GetPostRow
 }
 
 func (q *GetPostQuery) SQL() string {
@@ -322,11 +391,11 @@ func (q *GetPostQuery) Args() []any {
 }
 
 func (q *GetPostQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.result.ID, &q.result.AccountID, &q.result.Title, &q.result.Content, &q.result.Published, &q.result.CreatedAt, &q.result.Username, &q.result.Role)
+	return row.Scan(&q.Result.ID, &q.Result.AccountID, &q.Result.Title, &q.Result.Content, &q.Result.Published, &q.Result.CreatedAt, &q.Result.Username, &q.Result.Role)
 }
 
-func (q *GetPostQuery) Result() GetPostRow {
-	return q.result
+func (q *GetPostQuery) SetResult(result GetPostRow) {
+	q.Result = result
 }
 func (q *GetPostQuery) Eval(ctx context.Context, id int64) (GetPostRow, error) {
 	q.id = id
@@ -334,11 +403,21 @@ func (q *GetPostQuery) Eval(ctx context.Context, id int64) (GetPostRow, error) {
 		var zero GetPostRow
 		return zero, err
 	}
-	return q.Result(), nil
+	return q.Result, nil
 }
 
 func NewGetPostQuery(ex db.QueryExecutor) *GetPostQuery {
 	return &GetPostQuery{ex: ex}
+}
+func ExpectGetPost(id int64, result GetPostRow, err error) db.Step {
+	return db.Step{
+		SQL:  getPost,
+		Args: []any{id},
+		Apply: func(q db.Query) error {
+			q.(*GetPostQuery).SetResult(result)
+			return err
+		},
+	}
 }
 
 const listAccounts = `-- name: ListAccounts :many
@@ -351,7 +430,7 @@ type ListAccountsQuery struct {
 	ex      db.QueryExecutor
 	limit   int32
 	offset  int32
-	results []models.Account
+	Results []models.Account
 }
 
 func (q *ListAccountsQuery) SQL() string {
@@ -367,26 +446,36 @@ func (q *ListAccountsQuery) ScanRow(row pgx.Row) error {
 	if err := row.Scan(&i.ID, &i.Username, &i.Email, &i.Role, &i.Status, &i.CreatedAt, &i.UpdatedAt); err != nil {
 		return err
 	}
-	q.results = append(q.results, i)
+	q.Results = append(q.Results, i)
 	return nil
 }
 
-func (q *ListAccountsQuery) Results() []models.Account {
-	return q.results
+func (q *ListAccountsQuery) SetResults(results []models.Account) {
+	q.Results = results
 }
 
 func (q *ListAccountsQuery) Eval(ctx context.Context, limit int32, offset int32) ([]models.Account, error) {
 	q.limit = limit
 	q.offset = offset
-	q.results = nil
+	q.Results = nil
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return nil, err
 	}
-	return q.Results(), nil
+	return q.Results, nil
 }
 
 func NewListAccountsQuery(ex db.QueryExecutor) *ListAccountsQuery {
 	return &ListAccountsQuery{ex: ex}
+}
+func ExpectListAccounts(limit int32, offset int32, results []models.Account, err error) db.Step {
+	return db.Step{
+		SQL:  listAccounts,
+		Args: []any{limit, offset},
+		Apply: func(q db.Query) error {
+			q.(*ListAccountsQuery).SetResults(results)
+			return err
+		},
+	}
 }
 
 const listAccountsByRole = `-- name: ListAccountsByRole :many
@@ -398,7 +487,7 @@ ORDER BY created_at DESC
 type ListAccountsByRoleQuery struct {
 	ex      db.QueryExecutor
 	role    models.UserRole
-	results []models.Account
+	Results []models.Account
 }
 
 func (q *ListAccountsByRoleQuery) SQL() string {
@@ -414,25 +503,35 @@ func (q *ListAccountsByRoleQuery) ScanRow(row pgx.Row) error {
 	if err := row.Scan(&i.ID, &i.Username, &i.Email, &i.Role, &i.Status, &i.CreatedAt, &i.UpdatedAt); err != nil {
 		return err
 	}
-	q.results = append(q.results, i)
+	q.Results = append(q.Results, i)
 	return nil
 }
 
-func (q *ListAccountsByRoleQuery) Results() []models.Account {
-	return q.results
+func (q *ListAccountsByRoleQuery) SetResults(results []models.Account) {
+	q.Results = results
 }
 
 func (q *ListAccountsByRoleQuery) Eval(ctx context.Context, role models.UserRole) ([]models.Account, error) {
 	q.role = role
-	q.results = nil
+	q.Results = nil
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return nil, err
 	}
-	return q.Results(), nil
+	return q.Results, nil
 }
 
 func NewListAccountsByRoleQuery(ex db.QueryExecutor) *ListAccountsByRoleQuery {
 	return &ListAccountsByRoleQuery{ex: ex}
+}
+func ExpectListAccountsByRole(role models.UserRole, results []models.Account, err error) db.Step {
+	return db.Step{
+		SQL:  listAccountsByRole,
+		Args: []any{role},
+		Apply: func(q db.Query) error {
+			q.(*ListAccountsByRoleQuery).SetResults(results)
+			return err
+		},
+	}
 }
 
 const listPostsByAccount = `-- name: ListPostsByAccount :many
@@ -444,7 +543,7 @@ ORDER BY created_at DESC
 type ListPostsByAccountQuery struct {
 	ex        db.QueryExecutor
 	accountID int64
-	results   []models.Post
+	Results   []models.Post
 }
 
 func (q *ListPostsByAccountQuery) SQL() string {
@@ -460,25 +559,35 @@ func (q *ListPostsByAccountQuery) ScanRow(row pgx.Row) error {
 	if err := row.Scan(&i.ID, &i.AccountID, &i.Title, &i.Content, &i.Published, &i.CreatedAt); err != nil {
 		return err
 	}
-	q.results = append(q.results, i)
+	q.Results = append(q.Results, i)
 	return nil
 }
 
-func (q *ListPostsByAccountQuery) Results() []models.Post {
-	return q.results
+func (q *ListPostsByAccountQuery) SetResults(results []models.Post) {
+	q.Results = results
 }
 
 func (q *ListPostsByAccountQuery) Eval(ctx context.Context, accountID int64) ([]models.Post, error) {
 	q.accountID = accountID
-	q.results = nil
+	q.Results = nil
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return nil, err
 	}
-	return q.Results(), nil
+	return q.Results, nil
 }
 
 func NewListPostsByAccountQuery(ex db.QueryExecutor) *ListPostsByAccountQuery {
 	return &ListPostsByAccountQuery{ex: ex}
+}
+func ExpectListPostsByAccount(accountID int64, results []models.Post, err error) db.Step {
+	return db.Step{
+		SQL:  listPostsByAccount,
+		Args: []any{accountID},
+		Apply: func(q db.Query) error {
+			q.(*ListPostsByAccountQuery).SetResults(results)
+			return err
+		},
+	}
 }
 
 const publishPost = `-- name: PublishPost :execrows
@@ -490,7 +599,7 @@ WHERE id = $1 AND published = false
 type PublishPostQuery struct {
 	ex           db.QueryExecutor
 	id           int64
-	rowsAffected int64
+	RowsAffected int64
 }
 
 func (q *PublishPostQuery) SQL() string {
@@ -502,7 +611,7 @@ func (q *PublishPostQuery) Args() []any {
 }
 
 func (q *PublishPostQuery) SetRowsAffected(n int64) {
-	q.rowsAffected = n
+	q.RowsAffected = n
 }
 
 func (q *PublishPostQuery) Eval(ctx context.Context, id int64) (int64, error) {
@@ -510,11 +619,21 @@ func (q *PublishPostQuery) Eval(ctx context.Context, id int64) (int64, error) {
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return 0, err
 	}
-	return q.rowsAffected, nil
+	return q.RowsAffected, nil
 }
 
 func NewPublishPostQuery(ex db.QueryExecutor) *PublishPostQuery {
 	return &PublishPostQuery{ex: ex}
+}
+func ExpectPublishPost(id int64, rowsAffected int64, err error) db.Step {
+	return db.Step{
+		SQL:  publishPost,
+		Args: []any{id},
+		Apply: func(q db.Query) error {
+			q.(*PublishPostQuery).SetRowsAffected(rowsAffected)
+			return err
+		},
+	}
 }
 
 const updateAccountStatus = `-- name: UpdateAccountStatus :execrows
@@ -527,7 +646,7 @@ type UpdateAccountStatusQuery struct {
 	ex           db.QueryExecutor
 	iD           int64
 	status       models.AccountStatus
-	rowsAffected int64
+	RowsAffected int64
 }
 
 func (q *UpdateAccountStatusQuery) SQL() string {
@@ -539,7 +658,7 @@ func (q *UpdateAccountStatusQuery) Args() []any {
 }
 
 func (q *UpdateAccountStatusQuery) SetRowsAffected(n int64) {
-	q.rowsAffected = n
+	q.RowsAffected = n
 }
 
 func (q *UpdateAccountStatusQuery) Eval(ctx context.Context, iD int64, status models.AccountStatus) (int64, error) {
@@ -548,9 +667,19 @@ func (q *UpdateAccountStatusQuery) Eval(ctx context.Context, iD int64, status mo
 	if err := q.ex.Execute(ctx, q); err != nil {
 		return 0, err
 	}
-	return q.rowsAffected, nil
+	return q.RowsAffected, nil
 }
 
 func NewUpdateAccountStatusQuery(ex db.QueryExecutor) *UpdateAccountStatusQuery {
 	return &UpdateAccountStatusQuery{ex: ex}
+}
+func ExpectUpdateAccountStatus(iD int64, status models.AccountStatus, rowsAffected int64, err error) db.Step {
+	return db.Step{
+		SQL:  updateAccountStatus,
+		Args: []any{iD, status},
+		Apply: func(q db.Query) error {
+			q.(*UpdateAccountStatusQuery).SetRowsAffected(rowsAffected)
+			return err
+		},
+	}
 }

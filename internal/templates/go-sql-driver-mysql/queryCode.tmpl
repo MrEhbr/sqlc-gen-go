@@ -50,6 +50,10 @@ func (q *{{.MethodName}}Query) Result() {{.Ret.Type}} {
 	return q.result
 }
 
+func (q *{{.MethodName}}Query) SetResult(result {{.Ret.Type}}) {
+	q.result = result
+}
+
 func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.Pair}}{{end}}) ({{.Ret.Type}}, error) {
 	{{- if .Arg.Pair}}
 	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
@@ -70,6 +74,23 @@ func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
 
+{{- if $.EmitMockExecutor}}
+
+func Expect{{.MethodName}}({{if .Arg.Pair}}{{.Arg.Pair}}, {{end}}result {{.Ret.Type}}, err error) Step {
+	return Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.Pair}}
+		Args: []any{ {{.Arg.Params}} },
+		{{- else}}
+		Args: nil,
+		{{- end}}
+		Apply: func(q Query) error {
+			q.(*{{.MethodName}}Query).SetResult(result)
+			return err
+		},
+	}
+}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":many"}}
@@ -129,6 +150,10 @@ func (q *{{.MethodName}}Query) Results() []{{.Ret.Type}} {
 	return q.results
 }
 
+func (q *{{.MethodName}}Query) SetResults(results []{{.Ret.Type}}) {
+	q.results = results
+}
+
 func (q *{{.MethodName}}Query) Eval(ctx context.Context{{if .Arg.Pair}}, {{.Arg.Pair}}{{end}}) ([]{{.Ret.Type}}, error) {
 	{{- if .Arg.Pair}}
 	{{.Arg.Name}} := {{if .Arg.EmitStruct}}{{.Arg.Type}}{
@@ -149,6 +174,23 @@ func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
 
+{{- if $.EmitMockExecutor}}
+
+func Expect{{.MethodName}}({{if .Arg.Pair}}{{.Arg.Pair}}, {{end}}results []{{.Ret.Type}}, err error) Step {
+	return Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.Pair}}
+		Args: []any{ {{.Arg.Params}} },
+		{{- else}}
+		Args: nil,
+		{{- end}}
+		Apply: func(q Query) error {
+			q.(*{{.MethodName}}Query).SetResults(results)
+			return err
+		},
+	}
+}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":exec"}}
@@ -209,6 +251,22 @@ func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
 
+{{- if $.EmitMockExecutor}}
+
+func Expect{{.MethodName}}({{if .Arg.Pair}}{{.Arg.Pair}}, {{end}}err error) Step {
+	return Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.Pair}}
+		Args: []any{ {{.Arg.Params}} },
+		{{- else}}
+		Args: nil,
+		{{- end}}
+		Apply: func(q Query) error {
+			return err
+		},
+	}
+}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":execrows"}}
@@ -272,6 +330,23 @@ func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
 
+{{- if $.EmitMockExecutor}}
+
+func Expect{{.MethodName}}({{if .Arg.Pair}}{{.Arg.Pair}}, {{end}}rowsAffected int64, err error) Step {
+	return Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.Pair}}
+		Args: []any{ {{.Arg.Params}} },
+		{{- else}}
+		Args: nil,
+		{{- end}}
+		Apply: func(q Query) error {
+			q.(*{{.MethodName}}Query).SetRowsAffected(rowsAffected)
+			return err
+		},
+	}
+}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":execlastid"}}
@@ -340,6 +415,23 @@ func New{{.MethodName}}Query(ex QueryExecutor) *{{.MethodName}}Query {
 	return &{{.MethodName}}Query{ex: ex}
 }
 
+{{- if $.EmitMockExecutor}}
+
+func Expect{{.MethodName}}({{if .Arg.Pair}}{{.Arg.Pair}}, {{end}}lastID int64, err error) Step {
+	return Step{
+		SQL:  {{.ConstantName}},
+		{{- if .Arg.Pair}}
+		Args: []any{ {{.Arg.Params}} },
+		{{- else}}
+		Args: nil,
+		{{- end}}
+		Apply: func(q Query) error {
+			q.(*{{.MethodName}}Query).SetLastInsertID(lastID)
+			return err
+		},
+	}
+}
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":execresult"}}
