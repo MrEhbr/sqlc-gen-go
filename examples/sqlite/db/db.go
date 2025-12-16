@@ -53,6 +53,7 @@ type QueryExecLastID interface {
 // QueryExecutor executes queries
 type QueryExecutor interface {
 	Execute(ctx context.Context, query Query) error
+	WithTx(ctx context.Context, fn func(QueryExecutor) error) error
 }
 
 // Executor implements QueryExecutor using DBTX
@@ -209,6 +210,10 @@ func (s *StubExecutor) AssertDone() {
 	if s.i != len(s.steps) {
 		s.t.Errorf("not all steps executed: %d/%d", s.i, len(s.steps))
 	}
+}
+
+func (s *StubExecutor) WithTx(ctx context.Context, fn func(QueryExecutor) error) error {
+	return fn(s)
 }
 
 var _ QueryExecutor = (*StubExecutor)(nil)
