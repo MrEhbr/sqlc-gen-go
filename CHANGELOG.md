@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.3.0](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.2.0..v0.3.0) - 2025-12-16
+
+### Features
+
+- add WithTx to QueryExecutor interface - ([f734d1e](https://github.com/MrEhbr/sqlc-gen-go/commit/f734d1e6ee9bf48aebf1c692b2efb11912bf090f)) - Aleksei Burmistrov
+
+---
 ## [0.2.0](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.1.2..v0.2.0) - 2025-12-15
 
 ### Bug Fixes
