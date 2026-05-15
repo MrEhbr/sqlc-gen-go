@@ -72,6 +72,14 @@ func AllUserStatusValues() []UserStatus {
 	}
 }
 
+type Post struct {
+	ID        int64              `db:"id" json:"id"`
+	AuthorID  int64              `db:"author_id" json:"author_id"`
+	Title     string             `db:"title" json:"title"`
+	Body      string             `db:"body" json:"body"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type User struct {
 	ID          int64              `db:"id" json:"id"`
 	Name        string             `db:"name" json:"name"`

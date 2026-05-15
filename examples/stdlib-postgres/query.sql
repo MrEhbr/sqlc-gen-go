@@ -35,3 +35,20 @@ FOR UPDATE;
 
 -- name: CountUsers :one
 SELECT COUNT(*) FROM users;
+
+-- name: CreatePost :one
+INSERT INTO posts (author_id, title, body)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: GetPostWithAuthor :one
+SELECT sqlc.embed(posts), sqlc.embed(users)
+FROM posts
+JOIN users ON users.id = posts.author_id
+WHERE posts.id = $1;
+
+-- name: ListPostsWithAuthor :many
+SELECT sqlc.embed(posts), sqlc.embed(users)
+FROM posts
+JOIN users ON users.id = posts.author_id
+ORDER BY posts.created_at DESC;

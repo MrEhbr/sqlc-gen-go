@@ -53,9 +53,11 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	}
 
 	// Create schema
-	_, err = database.Exec(`DROP TABLE IF EXISTS users`)
-	if err != nil {
-		t.Fatalf("failed to drop table: %v", err)
+	if _, err = database.Exec(`DROP TABLE IF EXISTS posts`); err != nil {
+		t.Fatalf("failed to drop posts: %v", err)
+	}
+	if _, err = database.Exec(`DROP TABLE IF EXISTS users`); err != nil {
+		t.Fatalf("failed to drop users: %v", err)
 	}
 
 	_, err = database.Exec(`
@@ -66,7 +68,20 @@ CREATE TABLE users (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 )`)
 	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
+		t.Fatalf("failed to create users: %v", err)
+	}
+
+	_, err = database.Exec(`
+CREATE TABLE posts (
+  id         BIGINT PRIMARY KEY AUTO_INCREMENT,
+  author_id  BIGINT NOT NULL,
+  title      VARCHAR(255) NOT NULL,
+  body       TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+)`)
+	if err != nil {
+		t.Fatalf("failed to create posts: %v", err)
 	}
 
 	cleanup := func() {
@@ -314,6 +329,54 @@ func TestQueries(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("WithTx nested queries failed: %v", err)
+		}
+	})
+
+	t.Run("GetPostWithAuthor", func(t *testing.T) {
+		authorID, err := db.NewCreateUserGetIDQuery(executor).Eval(ctx, "embed_author", "embed_author@example.com")
+		if err != nil {
+			t.Fatalf("CreateUserGetID failed: %v", err)
+		}
+		postID, err := db.NewCreatePostQuery(executor).Eval(ctx, db.CreatePostParams{AuthorID: authorID, Title: "embed_title", Body: "embed_body"})
+		if err != nil {
+			t.Fatalf("CreatePost failed: %v", err)
+		}
+		row, err := db.NewGetPostWithAuthorQuery(executor).Eval(ctx, postID)
+		if err != nil {
+			t.Fatalf("GetPostWithAuthor failed: %v", err)
+		}
+		if row.Post.ID != postID || row.Post.Title != "embed_title" {
+			t.Errorf("post not hydrated: %+v", row.Post)
+		}
+		if row.User.ID != authorID || row.User.Name != "embed_author" {
+			t.Errorf("embedded user not hydrated: %+v", row.User)
+		}
+	})
+
+	t.Run("ListPostsWithAuthor", func(t *testing.T) {
+		authorID, err := db.NewCreateUserGetIDQuery(executor).Eval(ctx, "embed_lister", "embed_lister@example.com")
+		if err != nil {
+			t.Fatalf("CreateUserGetID failed: %v", err)
+		}
+		for i, title := range []string{"a", "b"} {
+			if _, err := db.NewCreatePostQuery(executor).Eval(ctx, db.CreatePostParams{AuthorID: authorID, Title: title, Body: "body"}); err != nil {
+				t.Fatalf("CreatePost #%d failed: %v", i, err)
+			}
+		}
+		rows, err := db.NewListPostsWithAuthorQuery(executor).Eval(ctx)
+		if err != nil {
+			t.Fatalf("ListPostsWithAuthor failed: %v", err)
+		}
+		if len(rows) < 2 {
+			t.Fatalf("expected at least 2 rows, got %d", len(rows))
+		}
+		for _, row := range rows {
+			if row.Post.ID == 0 || row.User.ID == 0 {
+				t.Errorf("row not hydrated: %+v", row)
+			}
+			if row.Post.AuthorID != row.User.ID {
+				t.Errorf("author_id %d does not match embedded user.id %d", row.Post.AuthorID, row.User.ID)
+			}
 		}
 	})
 }

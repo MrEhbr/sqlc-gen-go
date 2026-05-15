@@ -56,6 +56,7 @@ func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 DROP TYPE IF EXISTS user_status CASCADE;
 CREATE TYPE user_status AS ENUM ('active', 'inactive', 'banned');
 
+DROP TABLE IF EXISTS posts;
 DROP TABLE IF EXISTS users;
 CREATE TABLE users (
   id BIGSERIAL PRIMARY KEY,
@@ -63,6 +64,14 @@ CREATE TABLE users (
   email TEXT NOT NULL UNIQUE,
   status user_status NOT NULL DEFAULT 'active',
   description TEXT DEFAULT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE posts (
+  id         BIGSERIAL PRIMARY KEY,
+  author_id  BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  body       TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 `
@@ -434,6 +443,77 @@ func TestQueries(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("WithTx nested queries failed: %v", err)
+		}
+	})
+
+	// sqlc.embed: row hydrates two struct fields, one per embedded table.
+	t.Run("GetPostWithAuthor", func(t *testing.T) {
+		author, err := db.NewCreateUserQuery(executor).Eval(ctx, db.CreateUserParams{
+			Name:   "embed_author",
+			Email:  "embed_author@example.com",
+			Status: db.UserStatusActive,
+		})
+		if err != nil {
+			t.Fatalf("CreateUser failed: %v", err)
+		}
+
+		post, err := db.NewCreatePostQuery(executor).Eval(ctx, db.CreatePostParams{
+			AuthorID: author.ID,
+			Title:    "embed_title",
+			Body:     "embed_body",
+		})
+		if err != nil {
+			t.Fatalf("CreatePost failed: %v", err)
+		}
+
+		row, err := db.NewGetPostWithAuthorQuery(executor).Eval(ctx, post.ID)
+		if err != nil {
+			t.Fatalf("GetPostWithAuthor failed: %v", err)
+		}
+		if row.Post.ID != post.ID || row.Post.Title != "embed_title" || row.Post.Body != "embed_body" {
+			t.Errorf("post not hydrated: %+v", row.Post)
+		}
+		if row.User.ID != author.ID || row.User.Name != "embed_author" || row.User.Email != "embed_author@example.com" {
+			t.Errorf("embedded user not hydrated: %+v", row.User)
+		}
+	})
+
+	t.Run("ListPostsWithAuthor", func(t *testing.T) {
+		author, err := db.NewCreateUserQuery(executor).Eval(ctx, db.CreateUserParams{
+			Name:   "embed_lister",
+			Email:  "embed_lister@example.com",
+			Status: db.UserStatusActive,
+		})
+		if err != nil {
+			t.Fatalf("CreateUser failed: %v", err)
+		}
+		for i, title := range []string{"a", "b"} {
+			if _, err := db.NewCreatePostQuery(executor).Eval(ctx, db.CreatePostParams{
+				AuthorID: author.ID,
+				Title:    title,
+				Body:     "body",
+			}); err != nil {
+				t.Fatalf("CreatePost #%d failed: %v", i, err)
+			}
+		}
+
+		rows, err := db.NewListPostsWithAuthorQuery(executor).Eval(ctx)
+		if err != nil {
+			t.Fatalf("ListPostsWithAuthor failed: %v", err)
+		}
+		if len(rows) < 2 {
+			t.Fatalf("expected at least 2 rows, got %d", len(rows))
+		}
+		for _, row := range rows {
+			if row.Post.ID == 0 || row.Post.Title == "" {
+				t.Errorf("post not hydrated: %+v", row.Post)
+			}
+			if row.User.ID == 0 || row.User.Name == "" || row.User.Email == "" {
+				t.Errorf("embedded user not hydrated: %+v", row.User)
+			}
+			if row.Post.AuthorID != row.User.ID {
+				t.Errorf("author_id %d does not match embedded user.id %d", row.Post.AuthorID, row.User.ID)
+			}
 		}
 	})
 }

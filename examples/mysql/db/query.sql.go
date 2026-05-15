@@ -60,6 +60,61 @@ func ExpectCountUsers(result int64, err error) Step {
 	}
 }
 
+const createPost = `-- name: CreatePost :execlastid
+INSERT INTO posts (author_id, title, body)
+VALUES (?, ?, ?)
+`
+
+type CreatePostParams struct {
+	AuthorID int64  `json:"author_id"`
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+}
+
+type CreatePostQuery struct {
+	ex           QueryExecutor
+	arg          CreatePostParams
+	lastID       int64
+	rowsAffected int64
+}
+
+func (q *CreatePostQuery) SQL() string {
+	return createPost
+}
+
+func (q *CreatePostQuery) Args() []any {
+	return []any{q.arg.AuthorID, q.arg.Title, q.arg.Body}
+}
+
+func (q *CreatePostQuery) SetLastInsertID(n int64) {
+	q.lastID = n
+}
+
+func (q *CreatePostQuery) SetRowsAffected(n int64) {
+	q.rowsAffected = n
+}
+func (q *CreatePostQuery) Eval(ctx context.Context, arg CreatePostParams) (int64, error) {
+	q.arg = arg
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return 0, err
+	}
+	return q.lastID, nil
+}
+
+func NewCreatePostQuery(ex QueryExecutor) *CreatePostQuery {
+	return &CreatePostQuery{ex: ex}
+}
+func ExpectCreatePost(arg CreatePostParams, lastID int64, err error) Step {
+	return Step{
+		SQL:  createPost,
+		Args: []any{arg.AuthorID, arg.Title, arg.Body},
+		Apply: func(q Query) error {
+			q.(*CreatePostQuery).SetLastInsertID(lastID)
+			return err
+		},
+	}
+}
+
 const createUser = `-- name: CreateUser :execresult
 INSERT INTO users (name, email)
 VALUES (?, ?)
@@ -174,6 +229,76 @@ func ExpectDeleteUser(id int64, err error) Step {
 	}
 }
 
+const getPostWithAuthor = `-- name: GetPostWithAuthor :one
+SELECT posts.id, posts.author_id, posts.title, posts.body, posts.created_at, users.id, users.name, users.email, users.created_at
+FROM posts
+JOIN users ON users.id = posts.author_id
+WHERE posts.id = ?
+`
+
+type GetPostWithAuthorRow struct {
+	Post Post `json:"post"`
+	User User `json:"user"`
+}
+
+type GetPostWithAuthorQuery struct {
+	ex     QueryExecutor
+	id     int64
+	result GetPostWithAuthorRow
+}
+
+func (q *GetPostWithAuthorQuery) SQL() string {
+	return getPostWithAuthor
+}
+
+func (q *GetPostWithAuthorQuery) Args() []any {
+	return []any{q.id}
+}
+
+func (q *GetPostWithAuthorQuery) Scan(row *sql.Row) error {
+	return row.Scan(
+		&q.result.Post.ID,
+		&q.result.Post.AuthorID,
+		&q.result.Post.Title,
+		&q.result.Post.Body,
+		&q.result.Post.CreatedAt,
+		&q.result.User.ID,
+		&q.result.User.Name,
+		&q.result.User.Email,
+		&q.result.User.CreatedAt,
+	)
+}
+
+func (q *GetPostWithAuthorQuery) Result() GetPostWithAuthorRow {
+	return q.result
+}
+
+func (q *GetPostWithAuthorQuery) SetResult(result GetPostWithAuthorRow) {
+	q.result = result
+}
+func (q *GetPostWithAuthorQuery) Eval(ctx context.Context, id int64) (GetPostWithAuthorRow, error) {
+	q.id = id
+	if err := q.ex.Execute(ctx, q); err != nil {
+		var zero GetPostWithAuthorRow
+		return zero, err
+	}
+	return q.Result(), nil
+}
+
+func NewGetPostWithAuthorQuery(ex QueryExecutor) *GetPostWithAuthorQuery {
+	return &GetPostWithAuthorQuery{ex: ex}
+}
+func ExpectGetPostWithAuthor(id int64, result GetPostWithAuthorRow, err error) Step {
+	return Step{
+		SQL:  getPostWithAuthor,
+		Args: []any{id},
+		Apply: func(q Query) error {
+			q.(*GetPostWithAuthorQuery).SetResult(result)
+			return err
+		},
+	}
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, name, email, created_at FROM users
 WHERE id = ?
@@ -194,7 +319,12 @@ func (q *GetUserQuery) Args() []any {
 }
 
 func (q *GetUserQuery) Scan(row *sql.Row) error {
-	return row.Scan(&q.result.ID, &q.result.Name, &q.result.Email, &q.result.CreatedAt)
+	return row.Scan(
+		&q.result.ID,
+		&q.result.Name,
+		&q.result.Email,
+		&q.result.CreatedAt,
+	)
 }
 
 func (q *GetUserQuery) Result() User {
@@ -227,6 +357,79 @@ func ExpectGetUser(id int64, result User, err error) Step {
 	}
 }
 
+const listPostsWithAuthor = `-- name: ListPostsWithAuthor :many
+SELECT posts.id, posts.author_id, posts.title, posts.body, posts.created_at, users.id, users.name, users.email, users.created_at
+FROM posts
+JOIN users ON users.id = posts.author_id
+ORDER BY posts.created_at DESC
+`
+
+type ListPostsWithAuthorRow struct {
+	Post Post `json:"post"`
+	User User `json:"user"`
+}
+
+type ListPostsWithAuthorQuery struct {
+	ex      QueryExecutor
+	results []ListPostsWithAuthorRow
+}
+
+func (q *ListPostsWithAuthorQuery) SQL() string {
+	return listPostsWithAuthor
+}
+
+func (q *ListPostsWithAuthorQuery) Args() []any {
+	return nil
+}
+
+func (q *ListPostsWithAuthorQuery) ScanRow(row *sql.Rows) error {
+	var i ListPostsWithAuthorRow
+	if err := row.Scan(
+		&i.Post.ID,
+		&i.Post.AuthorID,
+		&i.Post.Title,
+		&i.Post.Body,
+		&i.Post.CreatedAt,
+		&i.User.ID,
+		&i.User.Name,
+		&i.User.Email,
+		&i.User.CreatedAt,
+	); err != nil {
+		return err
+	}
+	q.results = append(q.results, i)
+	return nil
+}
+
+func (q *ListPostsWithAuthorQuery) Results() []ListPostsWithAuthorRow {
+	return q.results
+}
+
+func (q *ListPostsWithAuthorQuery) SetResults(results []ListPostsWithAuthorRow) {
+	q.results = results
+}
+func (q *ListPostsWithAuthorQuery) Eval(ctx context.Context) ([]ListPostsWithAuthorRow, error) {
+	q.results = nil
+	if err := q.ex.Execute(ctx, q); err != nil {
+		return nil, err
+	}
+	return q.Results(), nil
+}
+
+func NewListPostsWithAuthorQuery(ex QueryExecutor) *ListPostsWithAuthorQuery {
+	return &ListPostsWithAuthorQuery{ex: ex}
+}
+func ExpectListPostsWithAuthor(results []ListPostsWithAuthorRow, err error) Step {
+	return Step{
+		SQL:  listPostsWithAuthor,
+		Args: nil,
+		Apply: func(q Query) error {
+			q.(*ListPostsWithAuthorQuery).SetResults(results)
+			return err
+		},
+	}
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, name, email, created_at FROM users
 ORDER BY created_at DESC
@@ -247,7 +450,12 @@ func (q *ListUsersQuery) Args() []any {
 
 func (q *ListUsersQuery) ScanRow(row *sql.Rows) error {
 	var i User
-	if err := row.Scan(&i.ID, &i.Name, &i.Email, &i.CreatedAt); err != nil {
+	if err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.CreatedAt,
+	); err != nil {
 		return err
 	}
 	q.results = append(q.results, i)
