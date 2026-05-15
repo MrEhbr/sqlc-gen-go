@@ -571,22 +571,27 @@ func postgresType(req *plugin.GenerateRequest, options *opts.Options, col *plugi
 
 			for _, enum := range schema.Enums {
 				if rel.Name == enum.Name && rel.Schema == schema.Name {
-					if notNull {
-						if schema.Name == req.Catalog.DefaultSchema {
-							return StructName(enum.Name, options)
+					// In split-package mode the enum lives in the models package;
+					// callers in other packages must reference it qualified, and
+					// the modelsFile template strips the prefix when emitting in
+					// the models package itself.
+					qualify := func(name string) string {
+						if options.ModelsPackageImportPath != "" {
+							return options.OutputModelsPackage + "." + name
 						}
-						return StructName(schema.Name+"_"+enum.Name, options)
-					} else if emitPointersForNull {
-						if schema.Name == req.Catalog.DefaultSchema {
-							return "*" + StructName(enum.Name, options)
-						}
-						return "*" + StructName(schema.Name+"_"+enum.Name, options)
-					} else {
-						if schema.Name == req.Catalog.DefaultSchema {
-							return "Null" + StructName(enum.Name, options)
-						}
-						return "Null" + StructName(schema.Name+"_"+enum.Name, options)
+						return name
 					}
+					base := StructName(enum.Name, options)
+					if schema.Name != req.Catalog.DefaultSchema {
+						base = StructName(schema.Name+"_"+enum.Name, options)
+					}
+					if notNull {
+						return qualify(base)
+					}
+					if emitPointersForNull {
+						return "*" + qualify(base)
+					}
+					return qualify("Null" + base)
 				}
 			}
 

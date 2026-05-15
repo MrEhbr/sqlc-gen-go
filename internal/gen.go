@@ -389,18 +389,18 @@ func filterUnusedStructs(options *opts.Options, enums []Enum, structs []Struct, 
 		}
 	}
 
+	qualify := func(name string) string {
+		if options.ModelsPackageImportPath != "" {
+			return options.OutputModelsPackage + "." + name
+		}
+		return name
+	}
 	keepEnums := make([]Enum, 0, len(enums))
 	for _, enum := range enums {
-		var enumType string
-		if options.ModelsPackageImportPath != "" {
-			enumType = options.OutputModelsPackage + "." + enum.Name
-		} else {
-			enumType = enum.Name
-		}
-
-		_, keep := keepTypes[enumType]
-		_, keepNull := keepTypes["Null"+enumType]
-		if keep || keepNull {
+		_, keep := keepTypes[qualify(enum.Name)]
+		_, keepNull := keepTypes[qualify("Null"+enum.Name)]
+		_, keepPtr := keepTypes["*"+qualify(enum.Name)]
+		if keep || keepNull || keepPtr {
 			keepEnums = append(keepEnums, enum)
 		}
 	}

@@ -246,6 +246,13 @@ func buildImports(options *opts.Options, queries []Query, outputFile OutputFile,
 		if o.GoType.BasicType || o.GoType.TypeName == "" {
 			continue
 		}
+		// In split-package mode an override may target a type defined in the
+		// models package itself; emitting the import inside that same file
+		// would create a self-import / cycle.
+		if outputFile == OutputFileModel && options.ModelsPackageImportPath != "" &&
+			o.GoType.ImportPath == options.ModelsPackageImportPath {
+			continue
+		}
 		_, alreadyImported := std[o.GoType.ImportPath]
 		hasPackageAlias := o.GoType.Package != ""
 		if (!alreadyImported || hasPackageAlias) && uses(o.GoType.TypeName) {
