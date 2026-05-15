@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.3.2](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.3.1..v0.3.2) - 2026-05-15
+
+### Bug Fixes
+
+- **(types)** fix enum handling in split-package mode - ([e468bc0](https://github.com/MrEhbr/sqlc-gen-go/commit/e468bc06b1686ba260eb7bbaa59039961bd62be2)) - Aleksei Burmistrov
+
+### Tests
+
+- **(imports)** verify self-import override is skipped in models file - ([3910edf](https://github.com/MrEhbr/sqlc-gen-go/commit/3910edf61e0ec2e7bc7644c954170e0d1f72876e)) - Aleksei Burmistrov
+
+---
 ## [0.3.1](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.3.0..v0.3.1) - 2026-05-15
 
 ### Bug Fixes
