@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.3.1](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.3.0..v0.3.1) - 2026-05-15
+
+### Bug Fixes
+
+- **(templates)** restore sqlc.embed scan expansion in all drivers - ([3a76c5d](https://github.com/MrEhbr/sqlc-gen-go/commit/3a76c5d1500cfbc562a093be78f91dcc15a04c8f)) - Aleksei Burmistrov
+
+### Refactoring
+
+- **(types)** simplify enum name lookup with early returns - ([e22d80c](https://github.com/MrEhbr/sqlc-gen-go/commit/e22d80c60231a3dd05e3b60862269a2d8fd1b50d)) - Aleksei Burmistrov
+
+### Tests
+
+- **(examples)** add sqlc.embed roundtrip tests across all drivers - ([040e9f4](https://github.com/MrEhbr/sqlc-gen-go/commit/040e9f4e71e72b8335bd17d60d8181af4234c979)) - Aleksei Burmistrov
+
+---
 ## [0.3.0](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.2.0..v0.3.0) - 2025-12-16
 
 ### Features
