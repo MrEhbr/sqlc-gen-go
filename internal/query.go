@@ -191,32 +191,35 @@ func (v QueryValue) HasSqlcSlices() bool {
 }
 
 func (v QueryValue) Scan() string {
+	return v.ScanInto(v.Name)
+}
+
+// ScanInto expands sqlc.embed fields so the receiver path matches one scan target per column.
+func (v QueryValue) ScanInto(receiver string) string {
 	var out []string
 	if v.Struct == nil {
 		if strings.HasPrefix(v.Typ, "[]") && v.Typ != "[]byte" && !v.SQLDriver.IsPGX() {
-			out = append(out, "pq.Array(&"+v.Name+")")
+			out = append(out, "pq.Array(&"+receiver+")")
 		} else {
-			out = append(out, "&"+v.Name)
+			out = append(out, "&"+receiver)
 		}
 	} else {
 		for _, f := range v.Struct.Fields {
-
-			// append any embedded fields
 			if len(f.EmbedFields) > 0 {
 				for _, embed := range f.EmbedFields {
 					if strings.HasPrefix(embed.Type, "[]") && embed.Type != "[]byte" && !v.SQLDriver.IsPGX() {
-						out = append(out, "pq.Array(&"+v.Name+"."+f.Name+"."+embed.Name+")")
+						out = append(out, "pq.Array(&"+receiver+"."+f.Name+"."+embed.Name+")")
 					} else {
-						out = append(out, "&"+v.Name+"."+f.Name+"."+embed.Name)
+						out = append(out, "&"+receiver+"."+f.Name+"."+embed.Name)
 					}
 				}
 				continue
 			}
 
 			if strings.HasPrefix(f.Type, "[]") && f.Type != "[]byte" && !v.SQLDriver.IsPGX() {
-				out = append(out, "pq.Array(&"+v.Name+"."+f.Name+")")
+				out = append(out, "pq.Array(&"+receiver+"."+f.Name+")")
 			} else {
-				out = append(out, "&"+v.Name+"."+f.Name)
+				out = append(out, "&"+receiver+"."+f.Name)
 			}
 		}
 	}

@@ -134,7 +134,15 @@ func (q *CreateAccountQuery) Args() []any {
 }
 
 func (q *CreateAccountQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.Result.ID, &q.Result.Username, &q.Result.Email, &q.Result.Role, &q.Result.Status, &q.Result.CreatedAt, &q.Result.UpdatedAt)
+	return row.Scan(
+		&q.Result.ID,
+		&q.Result.Username,
+		&q.Result.Email,
+		&q.Result.Role,
+		&q.Result.Status,
+		&q.Result.CreatedAt,
+		&q.Result.UpdatedAt,
+	)
 }
 
 func (q *CreateAccountQuery) SetResult(result models.Account) {
@@ -191,7 +199,14 @@ func (q *CreatePostQuery) Args() []any {
 }
 
 func (q *CreatePostQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.Result.ID, &q.Result.AccountID, &q.Result.Title, &q.Result.Content, &q.Result.Published, &q.Result.CreatedAt)
+	return row.Scan(
+		&q.Result.ID,
+		&q.Result.AccountID,
+		&q.Result.Title,
+		&q.Result.Content,
+		&q.Result.Published,
+		&q.Result.CreatedAt,
+	)
 }
 
 func (q *CreatePostQuery) SetResult(result models.Post) {
@@ -280,7 +295,15 @@ func (q *GetAccountQuery) Args() []any {
 }
 
 func (q *GetAccountQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.Result.ID, &q.Result.Username, &q.Result.Email, &q.Result.Role, &q.Result.Status, &q.Result.CreatedAt, &q.Result.UpdatedAt)
+	return row.Scan(
+		&q.Result.ID,
+		&q.Result.Username,
+		&q.Result.Email,
+		&q.Result.Role,
+		&q.Result.Status,
+		&q.Result.CreatedAt,
+		&q.Result.UpdatedAt,
+	)
 }
 
 func (q *GetAccountQuery) SetResult(result models.Account) {
@@ -329,7 +352,15 @@ func (q *GetAccountByUsernameQuery) Args() []any {
 }
 
 func (q *GetAccountByUsernameQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.Result.ID, &q.Result.Username, &q.Result.Email, &q.Result.Role, &q.Result.Status, &q.Result.CreatedAt, &q.Result.UpdatedAt)
+	return row.Scan(
+		&q.Result.ID,
+		&q.Result.Username,
+		&q.Result.Email,
+		&q.Result.Role,
+		&q.Result.Status,
+		&q.Result.CreatedAt,
+		&q.Result.UpdatedAt,
+	)
 }
 
 func (q *GetAccountByUsernameQuery) SetResult(result models.Account) {
@@ -391,7 +422,16 @@ func (q *GetPostQuery) Args() []any {
 }
 
 func (q *GetPostQuery) Scan(row pgx.Row) error {
-	return row.Scan(&q.Result.ID, &q.Result.AccountID, &q.Result.Title, &q.Result.Content, &q.Result.Published, &q.Result.CreatedAt, &q.Result.Username, &q.Result.Role)
+	return row.Scan(
+		&q.Result.ID,
+		&q.Result.AccountID,
+		&q.Result.Title,
+		&q.Result.Content,
+		&q.Result.Published,
+		&q.Result.CreatedAt,
+		&q.Result.Username,
+		&q.Result.Role,
+	)
 }
 
 func (q *GetPostQuery) SetResult(result GetPostRow) {
@@ -443,7 +483,15 @@ func (q *ListAccountsQuery) Args() []any {
 
 func (q *ListAccountsQuery) ScanRow(row pgx.Row) error {
 	var i models.Account
-	if err := row.Scan(&i.ID, &i.Username, &i.Email, &i.Role, &i.Status, &i.CreatedAt, &i.UpdatedAt); err != nil {
+	if err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.Role,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	); err != nil {
 		return err
 	}
 	q.Results = append(q.Results, i)
@@ -500,7 +548,15 @@ func (q *ListAccountsByRoleQuery) Args() []any {
 
 func (q *ListAccountsByRoleQuery) ScanRow(row pgx.Row) error {
 	var i models.Account
-	if err := row.Scan(&i.ID, &i.Username, &i.Email, &i.Role, &i.Status, &i.CreatedAt, &i.UpdatedAt); err != nil {
+	if err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.Role,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	); err != nil {
 		return err
 	}
 	q.Results = append(q.Results, i)
@@ -556,7 +612,14 @@ func (q *ListPostsByAccountQuery) Args() []any {
 
 func (q *ListPostsByAccountQuery) ScanRow(row pgx.Row) error {
 	var i models.Post
-	if err := row.Scan(&i.ID, &i.AccountID, &i.Title, &i.Content, &i.Published, &i.CreatedAt); err != nil {
+	if err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Title,
+		&i.Content,
+		&i.Published,
+		&i.CreatedAt,
+	); err != nil {
 		return err
 	}
 	q.Results = append(q.Results, i)

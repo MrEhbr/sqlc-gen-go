@@ -57,7 +57,7 @@ func (q *{{.MethodName}}Query) Args() []any {
 
 func (q *{{.MethodName}}Query) Scan(row *sql.Row) error {
 	{{- if .Ret.IsStruct}}
-	return row.Scan({{range $i, $f := .Ret.Struct.Fields}}{{if $i}}, {{end}}&q.result.{{$f.Name}}{{end}})
+	return row.Scan({{.Ret.ScanInto "q.result"}})
 	{{- else}}
 	return row.Scan(&q.result)
 	{{- end}}
@@ -182,14 +182,13 @@ func (q *{{.MethodName}}Query) Args() []any {
 }
 
 func (q *{{.MethodName}}Query) ScanRow(row *sql.Rows) error {
-	{{- $retName := .Ret.Name}}
-	var {{$retName}} {{.Ret.Type}}
+	var {{.Ret.Name}} {{.Ret.Type}}
 	{{- if .Ret.IsStruct}}
-	if err := row.Scan({{range $i, $f := .Ret.Struct.Fields}}{{if $i}}, {{end}}&{{$retName}}.{{$f.Name}}{{end}}); err != nil {
+	if err := row.Scan({{.Ret.Scan}}); err != nil {
 		return err
 	}
 	{{- else}}
-	if err := row.Scan(&{{$retName}}); err != nil {
+	if err := row.Scan(&{{.Ret.Name}}); err != nil {
 		return err
 	}
 	{{- end}}
