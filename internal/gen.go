@@ -25,6 +25,7 @@ type tmplCtx struct {
 	Enums       []Enum
 	Structs     []Struct
 	GoQueries   []Query
+	Scanners    []rowScanner
 	SqlcVersion string
 
 	// TODO: Race conditions
@@ -104,11 +105,13 @@ func Generate(ctx context.Context, req *plugin.GenerateRequest) (*plugin.Generat
 		enums, structs = filterUnusedStructs(options, enums, structs, queries)
 	}
 
+	scanners := assignScanners(queries)
+
 	if err := validate(options, enums, structs, queries); err != nil {
 		return nil, err
 	}
 
-	return generate(req, options, enums, structs, queries)
+	return generate(req, options, enums, structs, queries, scanners)
 }
 
 func validate(options *opts.Options, enums []Enum, structs []Struct, queries []Query) error {
@@ -124,6 +127,9 @@ func validate(options *opts.Options, enums []Enum, structs []Struct, queries []Q
 		}
 		structNames[struckt.Name] = struct{}{}
 	}
+	if err := validateGeneratedNames(options, queries); err != nil {
+		return err
+	}
 	if !options.EmitExportedQueries {
 		return nil
 	}
@@ -138,12 +144,97 @@ func validate(options *opts.Options, enums []Enum, structs []Struct, queries []Q
 	return nil
 }
 
-func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, structs []Struct, queries []Query) (*plugin.GenerateResponse, error) {
+// runtimeNames are package-level identifiers declared by the pgx and stdlib dbCode.tmpl templates.
+var runtimeNames = map[string]struct{}{
+	"DBTX": {}, "DBTXWithTx": {}, "Query": {}, "ExecFunc": {}, "QueryExecutor": {}, "DB": {}, "New": {},
+	"Row": {}, "RowScanner": {}, "ScanValue": {}, "Statement": {}, "NewStatement": {},
+	"Executor": {}, "NewExecutor": {}, "Step": {}, "Expect": {},
+	"StubExecutor": {}, "NewStubExecutor": {}, "ErrBatchAlreadyClosed": {},
+	"oneQuery": {}, "manyQuery": {}, "execQuery": {}, "execResultQuery": {}, "execLastIDQuery": {},
+}
+
+// queryTypeName is the per-query type generated for :copyfrom and :batch* queries.
+func queryTypeName(q Query) string {
+	if q.Cmd == metadata.CmdCopyFrom || usesBatch([]Query{q}) {
+		return sdk.LowerTitle(q.MethodName) + "Query"
+	}
+	return ""
+}
+
+func validateGeneratedNames(options *opts.Options, queries []Query) error {
+	scannerNames := map[string]struct{}{}
+	queryTypeNames := map[string]struct{}{}
+	for _, q := range queries {
+		if q.ScannerName != "" {
+			scannerNames[q.ScannerName] = struct{}{}
+		}
+		if name := queryTypeName(q); name != "" {
+			queryTypeNames[name] = struct{}{}
+		}
+	}
+	separateQueries := options.OutputQueriesPackage != "" && options.OutputQueriesPackage != options.Package
+	for _, q := range queries {
+		if _, ok := scannerNames[q.ConstantName]; ok {
+			return fmt.Errorf("query %s: generated name %q conflicts with row scanner", q.MethodName, q.ConstantName)
+		}
+		typeName := queryTypeName(q)
+		inDBPackage := !separateQueries || typeName != ""
+		if !inDBPackage {
+			continue
+		}
+		if _, ok := queryTypeNames[q.ConstantName]; ok {
+			return fmt.Errorf("query %s: generated name %q conflicts with generated query type", q.MethodName, q.ConstantName)
+		}
+		for _, name := range []string{q.MethodName, q.ConstantName, typeName} {
+			if _, ok := runtimeNames[name]; ok {
+				return fmt.Errorf("query %s: generated name %q conflicts with runtime identifier", q.MethodName, name)
+			}
+		}
+	}
+	return nil
+}
+
+// rowScanner is a shared row scanner, emitted once in the query file named by SourceName.
+type rowScanner struct {
+	Name       string
+	SourceName string
+	Ret        QueryValue
+}
+
+// assignScanners sets ScannerName on :one and :many queries whose rows ScanValue cannot scan
+// (structs and pq.Array scalars) and returns one scanner per row type.
+func assignScanners(queries []Query) []rowScanner {
+	var scanners []rowScanner
+	seen := map[string]struct{}{}
+	for i := range queries {
+		q := &queries[i]
+		if q.Cmd != metadata.CmdOne && q.Cmd != metadata.CmdMany {
+			continue
+		}
+		switch {
+		case q.Ret.IsStruct():
+			q.ScannerName = "scan" + q.Ret.Struct.Name
+		case strings.Contains(q.Ret.Scan(), "pq.Array"):
+			q.ScannerName = "scan" + q.MethodName
+		default:
+			continue
+		}
+		if _, ok := seen[q.ScannerName]; ok {
+			continue
+		}
+		seen[q.ScannerName] = struct{}{}
+		scanners = append(scanners, rowScanner{Name: q.ScannerName, SourceName: q.SourceName, Ret: q.Ret})
+	}
+	return scanners
+}
+
+func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, structs []Struct, queries []Query, scanners []rowScanner) (*plugin.GenerateResponse, error) {
 	i := &importer{
-		Options: options,
-		Queries: queries,
-		Enums:   enums,
-		Structs: structs,
+		Options:  options,
+		Queries:  queries,
+		Enums:    enums,
+		Structs:  structs,
+		Scanners: scanners,
 	}
 
 	// Package qualifiers for query struct templates
@@ -176,6 +267,7 @@ func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, 
 		OmitSqlcVersion:        options.OmitSqlcVersion,
 		PackageQualifier:       packageQualifier,
 		ModelsPackageQualifier: modelsPackageQualifier,
+		Scanners:               scanners,
 	}
 
 	if tctx.UsesCopyFrom && !tctx.SQLDriver.IsPGX() && options.SqlDriver != string(opts.SQLDriverGoSQLDriverMySQL) {

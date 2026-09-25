@@ -48,3 +48,12 @@ SELECT sqlc.embed(posts), sqlc.embed(users)
 FROM posts
 JOIN users ON users.id = posts.author_id
 ORDER BY posts.created_at DESC;
+
+-- name: ListUsersByIDs :many
+SELECT * FROM users WHERE id IN (sqlc.slice('ids')) ORDER BY id;
+
+-- name: CountUsersByIDsExceptName :one
+SELECT COUNT(*) FROM users WHERE name <> sqlc.arg('name') AND id IN (sqlc.slice('ids'));
+
+-- name: CountUsersByNameOrEmail :one
+SELECT COUNT(*) FROM users WHERE name = sqlc.arg('value') OR email = sqlc.arg('value');

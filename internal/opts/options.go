@@ -35,7 +35,6 @@ type Options struct {
 	OutputModelsFileName        string            `json:"output_models_file_name,omitempty" yaml:"output_models_file_name"`
 	OutputModelsPackage         string            `json:"output_models_package,omitempty" yaml:"output_models_package"`
 	ModelsPackageImportPath     string            `json:"models_package_import_path,omitempty" yaml:"models_package_import_path"`
-	OutputQuerierFileName       string            `json:"output_querier_file_name,omitempty" yaml:"output_querier_file_name"`
 	OutputCopyfromFileName      string            `json:"output_copyfrom_file_name,omitempty" yaml:"output_copyfrom_file_name"`
 	OutputQueryFilesDirectory   string            `json:"output_query_files_directory,omitempty" yaml:"output_query_files_directory"`
 	OutputQueriesPackage        string            `json:"output_queries_package,omitempty" yaml:"output_queries_package"`

@@ -4,20 +4,21 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/MrEhbr/sqlc-gen-go)](https://github.com/MrEhbr/sqlc-gen-go/releases)
 
-A Go code generator plugin for [sqlc](https://sqlc.dev/) that generates type-safe, composable query structs from SQL.
+A Go code generator plugin for [sqlc](https://sqlc.dev/) that generates type-safe, composable query values from SQL.
 
 > [!NOTE]
-> This is a fork of [sqlc-dev/sqlc-gen-go](https://github.com/sqlc-dev/sqlc-gen-go) maintained by [@MrEhbr](https://github.com/MrEhbr) with an alternative query struct pattern and package organization features.
+> This is a fork of [sqlc-dev/sqlc-gen-go](https://github.com/sqlc-dev/sqlc-gen-go) maintained by [@MrEhbr](https://github.com/MrEhbr) with typed query values and package organization features.
 
 > [!WARNING]
-> **Breaking Changes**: This fork uses a query struct pattern instead of the traditional `Querier` interface. The generated code is **not compatible** with standard sqlc.
+> **Breaking Changes**: This fork generates typed query values instead of the traditional `Querier` interface. The generated code is **not compatible** with standard sqlc and requires **Go 1.27+**.
 
 ## What's Different
 
-This fork introduces a **query struct pattern** that replaces the traditional `Querier` interface approach:
+This fork replaces the traditional `Querier` interface with **typed query values**:
 
-- **No Querier interface**: Instead of a single interface with all query methods, each query becomes its own struct type
-- **Executor pattern**: Queries implement type-specific interfaces (`QueryOne`, `QueryMany`, `QueryExec`, etc.) and use an executor for database operations
+- **No Querier interface**: Instead of a single interface with all query methods, each query is a constructor returning a `Query[T]` value
+- **Executor pattern**: Queries run through a swappable `QueryExecutor` (real database, transaction, or test stub)
+- **Typed results**: `DB.Run` returns `T`, and user-defined queries plug into the same executor
 - **Separate models package**: New option to generate models in a separate package from queries
 - **Flexible file organization**: Control where query files are generated
 
@@ -47,14 +48,64 @@ q := New(db)
 user, err := q.GetUser(ctx, 1)
 ```
 
-**This fork (query struct pattern):**
+**This fork (typed query values, requires Go 1.27+):**
 
 ```go
-// Usage - more flexible
-executor := NewExecutor(db)
-query := NewGetUserQuery(executor)
-user, err := query.Eval(ctx, 1)
+d := New(NewExecutor(pool))
+user, err := d.Run(ctx, GetUser(1))     // Query[User]
+users, err := d.Run(ctx, ListUsers())   // Query[[]User]
 ```
+
+### Query Values
+
+With every driver (`pgx/v5`, `pgx/v4`, `database/sql` for PostgreSQL, MySQL and SQLite), every query compiles to a constructor returning a `Query[T]` value. `DB.Run` executes it on a `QueryExecutor` and returns `T`. The generated code uses generic methods and requires **Go 1.27+**.
+
+| Command | Generated type |
+|---------|----------------|
+| `:one` | `Query[Row]` |
+| `:many` | `Query[[]Row]` |
+| `:exec`, `:execrows` | `Query[int64]` (rows affected) |
+| `:execresult` | `Query[pgconn.CommandTag]` (pgx), `Query[sql.Result]` (database/sql) |
+| `:execlastid` | `Query[int64]` (last insert ID, database/sql) |
+| `:copyfrom` | `Query[int64]` (rows copied; pgx, or MySQL with `sql_driver: github.com/go-sql-driver/mysql`) |
+| `:batchexec`, `:batchone`, `:batchmany` | `Query[*<name>BatchResults]` (pgx) |
+
+Transactions:
+
+```go
+err := d.WithTx(ctx, func(tx DB) error {
+    _, err := tx.Run(ctx, UpdateUserEmail(id, email))
+    return err
+})
+```
+
+Custom queries implement the same interface and run through `DB`, transactions and `StubExecutor`:
+
+```go
+type Query[T any] interface {
+    SQL() string
+    Args() []any
+    Do(ctx context.Context, db DBTX) (T, error)
+}
+
+// Or build one from the helpers generated code uses:
+active := NewStatement("SELECT COUNT(*) FROM users WHERE status = $1", "active").One(ScanValue[int64])
+n, err := d.Run(ctx, active)
+```
+
+Mocking with `emit_mock_executor: true`:
+
+```go
+stub := NewStubExecutor(t,
+    Expect(GetUser(1), User{ID: 1, Name: "Alice"}, nil),
+    Expect(ListUsers(), []User{{ID: 1}}, nil),
+)
+d := New(stub)
+```
+
+With `emit_exported_queries: true`, query constants get an `SQL` suffix (`GetUserSQL`), since `GetUser` is the constructor. Query names that collide with the generated runtime (`Query`, `DB`, `New`, `Expect`, …) are rejected at generation time.
+
+`sqlc.slice` (MySQL, SQLite) is expanded when the query value is constructed, so `Expect` matches the expanded SQL and flattened arguments. With SQLite, place `sqlc.slice` after other parameters in the query: sqlc emits numbered placeholders (`?1`, `?2`) there, and a slice expanded before them shifts their positions.
 
 ### New Configuration Options
 
@@ -157,7 +208,7 @@ sql:
 db/
 ├── db.go           # Executor and database code
 ├── models.go       # Table models
-└── query.sql.go    # Query structs and methods
+└── query.sql.go    # Query constructors and row scanners
 ```
 
 ### Separate Models Package
@@ -190,7 +241,7 @@ sql:
 models/
 └── models.go       # Table models (package models)
 db.go               # Executor code (package db)
-query.sql.go        # Query structs (package db, imports models)
+query.sql.go        # Query constructors (package db, imports models)
 ```
 
 ### Split Packages with Custom File Organization
@@ -234,7 +285,7 @@ models/
 db/
 └── db.go                    # Executor code (package db)
 queries/
-└── query.sql.gen.go         # Query structs (package queries, imports models + db)
+└── query.sql.gen.go         # Query constructors (package queries, imports models + db)
 ```
 
 ## Building from source

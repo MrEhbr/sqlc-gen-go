@@ -13,11 +13,12 @@ func TestSingleQuery(t *testing.T) {
 	ctx := context.Background()
 
 	stub := db.NewStubExecutor(t,
-		db.ExpectGetUser(1, db.User{ID: 1, Name: "Alice", Email: "alice@test.com"}, nil),
+		db.Expect(db.GetUser(1), db.User{ID: 1, Name: "Alice", Email: "alice@test.com"}, nil),
 	)
 
-	query := db.NewGetUserQuery(stub)
-	user, err := query.Eval(ctx, 1)
+	d := db.New(stub)
+
+	user, err := d.Run(ctx, db.GetUser(1))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -33,17 +34,18 @@ func TestMultipleQueries(t *testing.T) {
 	ctx := context.Background()
 
 	stub := db.NewStubExecutor(t,
-		db.ExpectGetUser(1, db.User{ID: 1, Name: "Alice", Email: "alice@test.com"}, nil),
-		db.ExpectListUsers([]db.User{
+		db.Expect(db.GetUser(1), db.User{ID: 1, Name: "Alice", Email: "alice@test.com"}, nil),
+		db.Expect(db.ListUsers(), []db.User{
 			{ID: 1, Name: "Alice"},
 			{ID: 2, Name: "Bob"},
 		}, nil),
-		db.ExpectDeleteUser(1, 1, nil),
+		db.Expect(db.DeleteUser(1), 1, nil),
 	)
 
+	d := db.New(stub)
+
 	// Test GetUser
-	getQuery := db.NewGetUserQuery(stub)
-	user, err := getQuery.Eval(ctx, 1)
+	user, err := d.Run(ctx, db.GetUser(1))
 	if err != nil {
 		t.Fatalf("GetUser failed: %v", err)
 	}
@@ -52,8 +54,7 @@ func TestMultipleQueries(t *testing.T) {
 	}
 
 	// Test ListUsers
-	listQuery := db.NewListUsersQuery(stub)
-	users, err := listQuery.Eval(ctx)
+	users, err := d.Run(ctx, db.ListUsers())
 	if err != nil {
 		t.Fatalf("ListUsers failed: %v", err)
 	}
@@ -62,8 +63,7 @@ func TestMultipleQueries(t *testing.T) {
 	}
 
 	// Test DeleteUser
-	deleteQuery := db.NewDeleteUserQuery(stub)
-	rows, err := deleteQuery.Eval(ctx, 1)
+	rows, err := d.Run(ctx, db.DeleteUser(1))
 	if err != nil {
 		t.Fatalf("DeleteUser failed: %v", err)
 	}
@@ -79,11 +79,12 @@ func TestErrorCase(t *testing.T) {
 	ctx := context.Background()
 
 	stub := db.NewStubExecutor(t,
-		db.ExpectGetUser(1, db.User{}, errors.New("database error")),
+		db.Expect(db.GetUser(1), db.User{}, errors.New("database error")),
 	)
 
-	query := db.NewGetUserQuery(stub)
-	_, err := query.Eval(ctx, 1)
+	d := db.New(stub)
+
+	_, err := d.Run(ctx, db.GetUser(1))
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -101,18 +102,15 @@ func TestOrderedCalls(t *testing.T) {
 
 	stub := db.NewStubExecutor(t,
 		// First call: CreateUser
-		db.ExpectCreateUser(
-			db.CreateUserParams{Name: "Alice", Email: "alice@test.com"},
-			db.User{ID: 1, Name: "Alice", Email: "alice@test.com"},
-			nil,
-		),
+		db.Expect(db.CreateUser(db.CreateUserParams{Name: "Alice", Email: "alice@test.com"}), db.User{ID: 1, Name: "Alice", Email: "alice@test.com"}, nil),
 		// Second call: GetUser
-		db.ExpectGetUser(1, db.User{ID: 1, Name: "Alice", Email: "alice@test.com"}, nil),
+		db.Expect(db.GetUser(1), db.User{ID: 1, Name: "Alice", Email: "alice@test.com"}, nil),
 	)
 
+	d := db.New(stub)
+
 	// Create then Get - order matters!
-	createQuery := db.NewCreateUserQuery(stub)
-	createdUser, err := createQuery.Eval(ctx, db.CreateUserParams{Name: "Alice", Email: "alice@test.com"})
+	createdUser, err := d.Run(ctx, db.CreateUser(db.CreateUserParams{Name: "Alice", Email: "alice@test.com"}))
 	if err != nil {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
@@ -120,8 +118,7 @@ func TestOrderedCalls(t *testing.T) {
 		t.Errorf("expected created user ID 1, got %d", createdUser.ID)
 	}
 
-	getQuery := db.NewGetUserQuery(stub)
-	gotUser, err := getQuery.Eval(ctx, 1)
+	gotUser, err := d.Run(ctx, db.GetUser(1))
 	if err != nil {
 		t.Fatalf("GetUser failed: %v", err)
 	}
@@ -138,24 +135,23 @@ func TestRepeatedQueries(t *testing.T) {
 
 	// Expect GetUser to be called twice with different IDs
 	stub := db.NewStubExecutor(t,
-		db.ExpectGetUser(1, db.User{ID: 1, Name: "Alice"}, nil),
-		db.ExpectGetUser(2, db.User{ID: 2, Name: "Bob"}, nil),
-		db.ExpectGetUser(1, db.User{ID: 1, Name: "Alice"}, nil), // Called again!
+		db.Expect(db.GetUser(1), db.User{ID: 1, Name: "Alice"}, nil),
+		db.Expect(db.GetUser(2), db.User{ID: 2, Name: "Bob"}, nil),
+		db.Expect(db.GetUser(1), db.User{ID: 1, Name: "Alice"}, nil), // Called again!
 	)
+	d := db.New(stub)
 
-	query := db.NewGetUserQuery(stub)
-
-	user1, _ := query.Eval(ctx, 1)
+	user1, _ := d.Run(ctx, db.GetUser(1))
 	if user1.Name != "Alice" {
 		t.Errorf("expected Alice, got %s", user1.Name)
 	}
 
-	user2, _ := query.Eval(ctx, 2)
+	user2, _ := d.Run(ctx, db.GetUser(2))
 	if user2.Name != "Bob" {
 		t.Errorf("expected Bob, got %s", user2.Name)
 	}
 
-	user1Again, _ := query.Eval(ctx, 1)
+	user1Again, _ := d.Run(ctx, db.GetUser(1))
 	if user1Again.Name != "Alice" {
 		t.Errorf("expected Alice, got %s", user1Again.Name)
 	}
@@ -171,15 +167,16 @@ func TestUnexpectedQuery(t *testing.T) {
 	ctx := context.Background()
 
 	stub := db.NewStubExecutor(fakeT,
-		db.ExpectGetUser(1, db.User{ID: 1, Name: "Alice"}, nil),
+		db.Expect(db.GetUser(1), db.User{ID: 1, Name: "Alice"}, nil),
 	)
 
+	d := db.New(stub)
+
 	// Execute the expected query
-	query := db.NewGetUserQuery(stub)
-	query.Eval(ctx, 1)
+	d.Run(ctx, db.GetUser(1))
 
 	// Try to execute an unexpected query
-	query.Eval(ctx, 2)
+	d.Run(ctx, db.GetUser(2))
 
 	if !fakeT.failed {
 		t.Error("expected test to fail on unexpected query")
@@ -191,14 +188,15 @@ func TestIncompleteSteps(t *testing.T) {
 	fakeT := &fakeT{}
 
 	stub := db.NewStubExecutor(fakeT,
-		db.ExpectGetUser(1, db.User{ID: 1, Name: "Alice"}, nil),
-		db.ExpectGetUser(2, db.User{ID: 2, Name: "Bob"}, nil),
+		db.Expect(db.GetUser(1), db.User{ID: 1, Name: "Alice"}, nil),
+		db.Expect(db.GetUser(2), db.User{ID: 2, Name: "Bob"}, nil),
 	)
+
+	d := db.New(stub)
 
 	// Only execute one query
 	ctx := context.Background()
-	query := db.NewGetUserQuery(stub)
-	query.Eval(ctx, 1)
+	d.Run(ctx, db.GetUser(1))
 
 	// Call AssertDone - should fail because second step wasn't executed
 	stub.AssertDone()
@@ -206,6 +204,61 @@ func TestIncompleteSteps(t *testing.T) {
 	if !fakeT.failed {
 		t.Error("expected AssertDone to fail when steps remain")
 	}
+}
+
+// userEmails is a hand-written query; any db.Query[T] runs through DB and StubExecutor.
+type userEmails struct {
+	ids []int64
+}
+
+func (q userEmails) SQL() string { return "SELECT id, email FROM users WHERE id = ANY($1)" }
+func (q userEmails) Args() []any { return []any{q.ids} }
+
+func (q userEmails) Do(ctx context.Context, conn db.DBTX) (map[int64]string, error) {
+	rows, err := conn.Query(ctx, q.SQL(), q.Args()...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var email string
+		if err := rows.Scan(&id, &email); err != nil {
+			return nil, err
+		}
+		out[id] = email
+	}
+	return out, rows.Err()
+}
+
+// TestCustomQuery shows mocking a user-defined query alongside generated ones
+func TestCustomQuery(t *testing.T) {
+	ctx := context.Background()
+
+	stub := db.NewStubExecutor(t,
+		db.Expect(userEmails{ids: []int64{1, 2}}, map[int64]string{1: "alice@test.com", 2: "bob@test.com"}, nil),
+		db.Expect(db.NewStatement("SELECT COUNT(*) FROM users").One(db.ScanValue[int64]), 2, nil),
+	)
+	d := db.New(stub)
+
+	emails, err := d.Run(ctx, userEmails{ids: []int64{1, 2}})
+	if err != nil {
+		t.Fatalf("userEmails failed: %v", err)
+	}
+	if emails[2] != "bob@test.com" {
+		t.Errorf("expected bob@test.com, got %q", emails[2])
+	}
+
+	count, err := d.Run(ctx, db.NewStatement("SELECT COUNT(*) FROM users").One(db.ScanValue[int64]))
+	if err != nil {
+		t.Fatalf("count failed: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2, got %d", count)
+	}
+
+	stub.AssertDone()
 }
 
 // fakeT implements the testing interface to capture failures

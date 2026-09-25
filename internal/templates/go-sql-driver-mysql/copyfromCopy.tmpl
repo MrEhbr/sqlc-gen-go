@@ -21,12 +21,31 @@ func convertRowsFor{{.MethodName}}(w *io.PipeWriter, {{.Arg.SlicePair}}) {
 	w.CloseWithError(e.Close())
 }
 
-{{range .Comments}}//{{.}}
-{{end -}}
-type {{.MethodName}}Query struct {
-	db DBTX
+type {{lowerTitle .MethodName}}Query struct {
+	rows []{{.Arg.DefineType}}
 }
 
+func (q {{lowerTitle .MethodName}}Query) SQL() string { return "" }
+func (q {{lowerTitle .MethodName}}Query) Args() []any { return nil }
+
+func (q {{lowerTitle .MethodName}}Query) Do(ctx context.Context, db DBTX) (int64, error) {
+	pr, pw := io.Pipe()
+	defer pr.Close()
+	rh := fmt.Sprintf("{{.MethodName}}_%d", atomic.AddUint32(&readerHandlerSequenceFor{{.MethodName}}, 1))
+	mysql.RegisterReaderHandler(rh, func() io.Reader { return pr })
+	defer mysql.DeregisterReaderHandler(rh)
+	go convertRowsFor{{.MethodName}}(pw, q.rows)
+	// The string interpolation is necessary because LOAD DATA INFILE requires
+	// the file name to be given as a literal string.
+	result, err := db.ExecContext(ctx, fmt.Sprintf("LOAD DATA LOCAL INFILE '%s' INTO TABLE {{.TableIdentifierForMySQL}} %s ({{range $index, $name := .Arg.ColumnNames}}{{if gt $index 0}}, {{end}}{{$name}}{{end}})", "Reader::" + rh, mysqltsv.Escaping))
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+{{range .Comments}}//{{.}}
+{{end -}}
 // {{.MethodName}} uses MySQL's LOAD DATA LOCAL INFILE and is not atomic.
 //
 // Errors and duplicate keys are treated as warnings and insertion will
@@ -35,24 +54,8 @@ type {{.MethodName}}Query struct {
 //
 // Check the documentation for more information:
 // https://dev.mysql.com/doc/refman/8.0/en/load-data.html#load-data-error-handling
-func (q *{{.MethodName}}Query) Eval(ctx context.Context, {{.Arg.SlicePair}}) (int64, error) {
-	pr, pw := io.Pipe()
-	defer pr.Close()
-	rh := fmt.Sprintf("{{.MethodName}}_%d", atomic.AddUint32(&readerHandlerSequenceFor{{.MethodName}}, 1))
-	mysql.RegisterReaderHandler(rh, func() io.Reader { return pr })
-	defer mysql.DeregisterReaderHandler(rh)
-	go convertRowsFor{{.MethodName}}(pw, {{.Arg.Name}})
-	// The string interpolation is necessary because LOAD DATA INFILE requires
-	// the file name to be given as a literal string.
-	result, err := q.db.ExecContext(ctx, fmt.Sprintf("LOAD DATA LOCAL INFILE '%s' INTO TABLE {{.TableIdentifierForMySQL}} %s ({{range $index, $name := .Arg.ColumnNames}}{{if gt $index 0}}, {{end}}{{$name}}{{end}})", "Reader::" + rh, mysqltsv.Escaping))
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-func New{{.MethodName}}Query(db DBTX) *{{.MethodName}}Query {
-	return &{{.MethodName}}Query{db: db}
+func {{.MethodName}}({{.Arg.SlicePair}}) Query[int64] {
+	return {{lowerTitle .MethodName}}Query{rows: {{.Arg.Name}}}
 }
 
 {{end}}

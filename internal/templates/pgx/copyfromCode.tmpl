@@ -42,48 +42,23 @@ func (r iteratorFor{{.MethodName}}) Err() error {
 	return nil
 }
 
+var _ pgx.CopyFromSource = (*iteratorFor{{.MethodName}})(nil)
+
 type {{lowerTitle .MethodName}}Query struct {
-	ex         QueryExecutor
-	rows       []{{.Arg.DefineType}}
-	rowsCopied int64
+	rows []{{.Arg.DefineType}}
 }
 
-func (q *{{lowerTitle .MethodName}}Query) SQL() string {
-	return ""
-}
+func (q {{lowerTitle .MethodName}}Query) SQL() string { return "" }
+func (q {{lowerTitle .MethodName}}Query) Args() []any { return nil }
 
-func (q *{{lowerTitle .MethodName}}Query) Args() []any {
-	return nil
-}
-
-func (q *{{lowerTitle .MethodName}}Query) TableName() pgx.Identifier {
-	return {{.TableIdentifierAsGoSlice}}
-}
-
-func (q *{{lowerTitle .MethodName}}Query) ColumnNames() []string {
-	return {{.Arg.ColumnNamesAsGoSlice}}
-}
-
-func (q *{{lowerTitle .MethodName}}Query) CopyFromSource() pgx.CopyFromSource {
-	return &iteratorFor{{.MethodName}}{rows: q.rows}
-}
-
-func (q *{{lowerTitle .MethodName}}Query) SetRowsCopied(n int64) {
-	q.rowsCopied = n
-}
-
-func New{{.MethodName}}Query(ex QueryExecutor) *{{lowerTitle .MethodName}}Query {
-	return &{{lowerTitle .MethodName}}Query{ex: ex}
+func (q {{lowerTitle .MethodName}}Query) Do(ctx context.Context, db DBTX) (int64, error) {
+	return db.CopyFrom(ctx, {{.TableIdentifierAsGoSlice}}, {{.Arg.ColumnNamesAsGoSlice}}, &iteratorFor{{.MethodName}}{rows: q.rows})
 }
 
 {{range .Comments}}//{{.}}
 {{end -}}
-func (q *{{lowerTitle .MethodName}}Query) Eval(ctx context.Context, {{.Arg.SlicePair}}) (int64, error) {
-	q.rows = {{.Arg.Name}}
-	if err := q.ex.Execute(ctx, q); err != nil {
-		return 0, err
-	}
-	return q.rowsCopied, nil
+func {{.MethodName}}({{.Arg.SlicePair}}) Query[int64] {
+	return {{lowerTitle .MethodName}}Query{rows: {{.Arg.Name}}}
 }
 
 {{end}}

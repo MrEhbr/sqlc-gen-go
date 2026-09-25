@@ -1,6 +1,6 @@
 module github.com/sqlc-dev/sqlc-gen-go/examples/sqlite
 
-go 1.24.0
+go 1.27.0
 
 require modernc.org/sqlite v1.39.0
 

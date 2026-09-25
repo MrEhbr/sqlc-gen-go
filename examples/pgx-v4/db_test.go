@@ -90,12 +90,11 @@ func TestQueries(t *testing.T) {
 	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	executor := db.NewExecutor(pool)
+	d := db.New(db.NewExecutor(pool))
 
 	// Test CreateUser (:one with RETURNING)
 	t.Run("CreateUser", func(t *testing.T) {
-		query := db.NewCreateUserQuery(executor)
-		user, err := query.Eval(ctx, "foobar", "foobar@example.com")
+		user, err := d.Run(ctx, db.CreateUser("foobar", "foobar@example.com"))
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
 		}
@@ -112,14 +111,12 @@ func TestQueries(t *testing.T) {
 
 	// Test GetUser (:one)
 	t.Run("GetUser", func(t *testing.T) {
-		createQuery := db.NewCreateUserQuery(executor)
-		created, err := createQuery.Eval(ctx, "foobaz", "foobaz@example.com")
+		created, err := d.Run(ctx, db.CreateUser("foobaz", "foobaz@example.com"))
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
 		}
 
-		getQuery := db.NewGetUserQuery(executor)
-		user, err := getQuery.Eval(ctx, created.ID)
+		user, err := d.Run(ctx, db.GetUser(created.ID))
 		if err != nil {
 			t.Fatalf("GetUser failed: %v", err)
 		}
@@ -130,8 +127,7 @@ func TestQueries(t *testing.T) {
 
 	// Test ListUsers (:many)
 	t.Run("ListUsers", func(t *testing.T) {
-		query := db.NewListUsersQuery(executor)
-		users, err := query.Eval(ctx)
+		users, err := d.Run(ctx, db.ListUsers())
 		if err != nil {
 			t.Fatalf("ListUsers failed: %v", err)
 		}
@@ -142,14 +138,12 @@ func TestQueries(t *testing.T) {
 
 	// Test UpdateUserEmail (:execrows)
 	t.Run("UpdateUserEmail", func(t *testing.T) {
-		createQuery := db.NewCreateUserQuery(executor)
-		created, err := createQuery.Eval(ctx, "barbaz", "barbaz@example.com")
+		created, err := d.Run(ctx, db.CreateUser("barbaz", "barbaz@example.com"))
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
 		}
 
-		updateQuery := db.NewUpdateUserEmailQuery(executor)
-		rows, err := updateQuery.Eval(ctx, created.ID, "barbaz.updated@example.com")
+		rows, err := d.Run(ctx, db.UpdateUserEmail(created.ID, "barbaz.updated@example.com"))
 		if err != nil {
 			t.Fatalf("UpdateUserEmail failed: %v", err)
 		}
@@ -157,8 +151,7 @@ func TestQueries(t *testing.T) {
 			t.Errorf("expected 1 row updated, got %d", rows)
 		}
 
-		getQuery := db.NewGetUserQuery(executor)
-		user, err := getQuery.Eval(ctx, created.ID)
+		user, err := d.Run(ctx, db.GetUser(created.ID))
 		if err != nil {
 			t.Fatalf("GetUser failed: %v", err)
 		}
@@ -169,14 +162,12 @@ func TestQueries(t *testing.T) {
 
 	// Test GetUserForUpdate (:one with FOR UPDATE)
 	t.Run("GetUserForUpdate", func(t *testing.T) {
-		createQuery := db.NewCreateUserQuery(executor)
-		created, err := createQuery.Eval(ctx, "barfoo", "barfoo@example.com")
+		created, err := d.Run(ctx, db.CreateUser("barfoo", "barfoo@example.com"))
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
 		}
 
-		query := db.NewGetUserForUpdateQuery(executor)
-		user, err := query.Eval(ctx, created.ID)
+		user, err := d.Run(ctx, db.GetUserForUpdate(created.ID))
 		if err != nil {
 			t.Fatalf("GetUserForUpdate failed: %v", err)
 		}
@@ -187,20 +178,17 @@ func TestQueries(t *testing.T) {
 
 	// Test DeleteUser (:exec)
 	t.Run("DeleteUser", func(t *testing.T) {
-		createQuery := db.NewCreateUserQuery(executor)
-		created, err := createQuery.Eval(ctx, "bazbar", "bazbar@example.com")
+		created, err := d.Run(ctx, db.CreateUser("bazbar", "bazbar@example.com"))
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
 		}
 
-		deleteQuery := db.NewDeleteUserQuery(executor)
-		err = deleteQuery.Eval(ctx, created.ID)
+		_, err = d.Run(ctx, db.DeleteUser(created.ID))
 		if err != nil {
 			t.Fatalf("DeleteUser failed: %v", err)
 		}
 
-		getQuery := db.NewGetUserQuery(executor)
-		_, err = getQuery.Eval(ctx, created.ID)
+		_, err = d.Run(ctx, db.GetUser(created.ID))
 		if err == nil {
 			t.Error("expected error for deleted user, got nil")
 		}
@@ -208,9 +196,8 @@ func TestQueries(t *testing.T) {
 
 	// Test WithTx_Success
 	t.Run("WithTx_Success", func(t *testing.T) {
-		err := executor.WithTx(ctx, func(tx db.QueryExecutor) error {
-			createQuery := db.NewCreateUserQuery(tx)
-			_, err := createQuery.Eval(ctx, "txuser", "txuser@example.com")
+		err := d.WithTx(ctx, func(tx db.DB) error {
+			_, err := tx.Run(ctx, db.CreateUser("txuser", "txuser@example.com"))
 			return err
 		})
 		if err != nil {
@@ -221,13 +208,11 @@ func TestQueries(t *testing.T) {
 	// Test WithTx_Rollback
 	t.Run("WithTx_Rollback", func(t *testing.T) {
 		initialCount := 0
-		listQuery := db.NewListUsersQuery(executor)
-		users, _ := listQuery.Eval(ctx)
+		users, _ := d.Run(ctx, db.ListUsers())
 		initialCount = len(users)
 
-		err := executor.WithTx(ctx, func(tx db.QueryExecutor) error {
-			createQuery := db.NewCreateUserQuery(tx)
-			_, err := createQuery.Eval(ctx, "rollbackuser", "rollbackuser@example.com")
+		err := d.WithTx(ctx, func(tx db.DB) error {
+			_, err := tx.Run(ctx, db.CreateUser("rollbackuser", "rollbackuser@example.com"))
 			if err != nil {
 				return err
 			}
@@ -237,22 +222,22 @@ func TestQueries(t *testing.T) {
 			t.Fatal("expected error for rollback, got nil")
 		}
 
-		users, _ = listQuery.Eval(ctx)
+		users, _ = d.Run(ctx, db.ListUsers())
 		if len(users) != initialCount {
 			t.Errorf("expected user count to remain %d after rollback, got %d", initialCount, len(users))
 		}
 	})
 
 	t.Run("GetPostWithAuthor", func(t *testing.T) {
-		author, err := db.NewCreateUserQuery(executor).Eval(ctx, "embed_author", "embed_author@example.com")
+		author, err := d.Run(ctx, db.CreateUser("embed_author", "embed_author@example.com"))
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
 		}
-		post, err := db.NewCreatePostQuery(executor).Eval(ctx, db.CreatePostParams{AuthorID: author.ID, Title: "embed_title", Body: "embed_body"})
+		post, err := d.Run(ctx, db.CreatePost(db.CreatePostParams{AuthorID: author.ID, Title: "embed_title", Body: "embed_body"}))
 		if err != nil {
 			t.Fatalf("CreatePost failed: %v", err)
 		}
-		row, err := db.NewGetPostWithAuthorQuery(executor).Eval(ctx, post.ID)
+		row, err := d.Run(ctx, db.GetPostWithAuthor(post.ID))
 		if err != nil {
 			t.Fatalf("GetPostWithAuthor failed: %v", err)
 		}
@@ -265,16 +250,16 @@ func TestQueries(t *testing.T) {
 	})
 
 	t.Run("ListPostsWithAuthor", func(t *testing.T) {
-		author, err := db.NewCreateUserQuery(executor).Eval(ctx, "embed_lister", "embed_lister@example.com")
+		author, err := d.Run(ctx, db.CreateUser("embed_lister", "embed_lister@example.com"))
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
 		}
 		for i, title := range []string{"a", "b"} {
-			if _, err := db.NewCreatePostQuery(executor).Eval(ctx, db.CreatePostParams{AuthorID: author.ID, Title: title, Body: "body"}); err != nil {
+			if _, err := d.Run(ctx, db.CreatePost(db.CreatePostParams{AuthorID: author.ID, Title: title, Body: "body"})); err != nil {
 				t.Fatalf("CreatePost #%d failed: %v", i, err)
 			}
 		}
-		rows, err := db.NewListPostsWithAuthorQuery(executor).Eval(ctx)
+		rows, err := d.Run(ctx, db.ListPostsWithAuthor())
 		if err != nil {
 			t.Fatalf("ListPostsWithAuthor failed: %v", err)
 		}

@@ -58,10 +58,11 @@ func mergeImports(imps ...fileImports) [][]ImportSpec {
 }
 
 type importer struct {
-	Options *opts.Options
-	Queries []Query
-	Enums   []Enum
-	Structs []Struct
+	Options  *opts.Options
+	Queries  []Query
+	Enums    []Enum
+	Structs  []Struct
+	Scanners []rowScanner
 }
 
 func (i *importer) usesType(typ string) bool {
@@ -89,10 +90,6 @@ func (i *importer) Imports(filename string) [][]ImportSpec {
 	if i.Options.OutputModelsFileName != "" {
 		modelsFileName = i.Options.OutputModelsFileName
 	}
-	querierFileName := "querier.go"
-	if i.Options.OutputQuerierFileName != "" {
-		querierFileName = i.Options.OutputQuerierFileName
-	}
 	copyfromFileName := "copyfrom.go"
 	if i.Options.OutputCopyfromFileName != "" {
 		copyfromFileName = i.Options.OutputCopyfromFileName
@@ -107,8 +104,6 @@ func (i *importer) Imports(filename string) [][]ImportSpec {
 		return mergeImports(i.dbImports())
 	case modelsFileName:
 		return mergeImports(i.modelImports())
-	case querierFileName:
-		return mergeImports(i.interfaceImports())
 	case copyfromFileName:
 		return mergeImports(i.copyfromImports())
 	case batchFileName:
@@ -272,7 +267,7 @@ func buildImports(options *opts.Options, queries []Query, outputFile OutputFile,
 			}
 
 			// Check if the return type struct contains a type from models package (possibly an enum field or an embedded struct)
-			if outputFile != OutputFileInterface && q.hasRetType() && q.Ret.IsStruct() {
+			if q.hasRetType() && q.Ret.IsStruct() {
 				for _, f := range q.Ret.Struct.Fields {
 					if strings.HasPrefix(f.Type, options.OutputModelsPackage+".") {
 						return true
@@ -286,7 +281,7 @@ func buildImports(options *opts.Options, queries []Query, outputFile OutputFile,
 			}
 
 			// Check if the argument struct contains a type from models package (possibly an enum field)
-			if outputFile != OutputFileInterface && !q.Arg.isEmpty() && q.Arg.IsStruct() {
+			if !q.Arg.isEmpty() && q.Arg.IsStruct() {
 				for _, f := range q.Arg.Struct.Fields {
 					if strings.HasPrefix(f.Type, options.OutputModelsPackage+".") {
 						return true
@@ -302,31 +297,6 @@ func buildImports(options *opts.Options, queries []Query, outputFile OutputFile,
 	}
 
 	return std, pkg
-}
-
-func (i *importer) interfaceImports() fileImports {
-	std, pkg := buildImports(i.Options, i.Queries, OutputFileInterface, func(name string) bool {
-		for _, q := range i.Queries {
-			if q.hasRetType() {
-				if usesBatch([]Query{q}) {
-					continue
-				}
-				if hasPrefixIgnoringSliceAndPointerPrefix(q.Ret.Type(), name) {
-					return true
-				}
-			}
-			for _, f := range q.Arg.Pairs() {
-				if hasPrefixIgnoringSliceAndPointerPrefix(f.Type, name) {
-					return true
-				}
-			}
-		}
-		return false
-	})
-
-	std["context"] = struct{}{}
-
-	return sortedImports(std, pkg)
 }
 
 func (i *importer) modelImports() fileImports {
@@ -356,16 +326,12 @@ func sortedImports(std map[string]struct{}, pkg map[ImportSpec]struct{}) fileImp
 
 func (i *importer) queryImports(filename string) fileImports {
 	var gq []Query
-	anyNonCopyFrom := false
 	for _, query := range i.Queries {
 		if usesBatch([]Query{query}) {
 			continue
 		}
 		if query.SourceName == filename {
 			gq = append(gq, query)
-			if query.Cmd != metadata.CmdCopyFrom {
-				anyNonCopyFrom = true
-			}
 		}
 	}
 
@@ -402,25 +368,12 @@ func (i *importer) queryImports(filename string) fileImports {
 	})
 
 	sliceScan := func() bool {
-		for _, q := range gq {
-			if q.hasRetType() {
-				if q.Ret.IsStruct() {
-					for _, f := range q.Ret.Struct.Fields {
-						if strings.HasPrefix(f.Type, "[]") && f.Type != "[]byte" {
-							return true
-						}
-						for _, embed := range f.EmbedFields {
-							if strings.HasPrefix(embed.Type, "[]") && embed.Type != "[]byte" {
-								return true
-							}
-						}
-					}
-				} else {
-					if strings.HasPrefix(q.Ret.Type(), "[]") && q.Ret.Type() != "[]byte" {
-						return true
-					}
-				}
+		for _, s := range i.Scanners {
+			if s.SourceName == filename && strings.Contains(s.Ret.Scan(), "pq.Array") {
+				return true
 			}
+		}
+		for _, q := range gq {
 			if !q.Arg.isEmpty() {
 				if q.Arg.IsStruct() {
 					for _, f := range q.Arg.Struct.Fields {
@@ -448,10 +401,6 @@ func (i *importer) queryImports(filename string) fileImports {
 		return false
 	}
 
-	if anyNonCopyFrom {
-		std["context"] = struct{}{}
-	}
-
 	sqlpkg := parseDriver(i.Options.SqlPackage)
 	if sqlcSliceScan() && !sqlpkg.IsPGX() {
 		std["strings"] = struct{}{}
@@ -460,8 +409,15 @@ func (i *importer) queryImports(filename string) fileImports {
 		pkg[ImportSpec{Path: "github.com/lib/pq"}] = struct{}{}
 	}
 
+	ownsScanner := false
+	for _, s := range i.Scanners {
+		if s.SourceName == filename {
+			ownsScanner = true
+		}
+	}
+
 	// Add pgx import for query files that use pgx.Row
-	if anyNonCopyFrom && sqlpkg.IsPGX() {
+	if ownsScanner && sqlpkg.IsPGX() {
 		switch sqlpkg {
 		case opts.SQLDriverPGXV4:
 			pkg[ImportSpec{Path: "github.com/jackc/pgx/v4"}] = struct{}{}

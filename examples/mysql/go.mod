@@ -1,9 +1,10 @@
 module github.com/sqlc-dev/sqlc-gen-go/examples/mysql
 
-go 1.24.0
+go 1.27.0
 
 require (
 	github.com/go-sql-driver/mysql v1.9.3
+	github.com/hexon/mysqltsv v0.2.2
 	github.com/testcontainers/testcontainers-go v0.39.0
 	github.com/testcontainers/testcontainers-go/modules/mysql v0.39.0
 )

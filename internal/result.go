@@ -197,7 +197,7 @@ func buildQueries(req *plugin.GenerateRequest, options *opts.Options, structs []
 
 		var constantName string
 		if options.EmitExportedQueries {
-			constantName = sdk.Title(query.Name)
+			constantName = sdk.Title(query.Name) + "SQL"
 		} else {
 			constantName = sdk.LowerTitle(query.Name)
 		}

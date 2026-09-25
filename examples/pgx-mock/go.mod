@@ -1,6 +1,6 @@
 module github.com/sqlc-dev/sqlc-gen-go/examples/pgx-mock
 
-go 1.23.0
+go 1.27.0
 
 require github.com/jackc/pgx/v5 v5.7.2
 

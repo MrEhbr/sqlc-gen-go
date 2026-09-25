@@ -31,53 +31,34 @@ type {{.Ret.Type}} struct { {{- range .Ret.Struct.Fields}}
 {{end}}
 
 type {{lowerTitle .MethodName}}Query struct {
-	ex      QueryExecutor
-	args    []{{.Arg.DefineType}}
-	results *{{lowerTitle .MethodName}}BatchResults
+	args []{{.Arg.DefineType}}
 }
 
-func (q *{{lowerTitle .MethodName}}Query) SQL() string {
-	return {{.ConstantName}}
-}
+func (q {{lowerTitle .MethodName}}Query) SQL() string { return {{.ConstantName}} }
+func (q {{lowerTitle .MethodName}}Query) Args() []any { return nil }
 
-func (q *{{lowerTitle .MethodName}}Query) Args() []any {
-	return nil
-}
-
-func (q *{{lowerTitle .MethodName}}Query) BuildBatch() *pgx.Batch {
-    batch := &pgx.Batch{}
-    for _, a := range q.args {
-        vals := []any{
-        {{- if .Arg.Struct }}
-        {{- range .Arg.Struct.Fields }}
-            a.{{.Name}},
-        {{- end }}
-        {{- else }}
-            a,
-        {{- end }}
-        }
-        batch.Queue({{.ConstantName}}, vals...)
-    }
-    return batch
-}
-
-func (q *{{lowerTitle .MethodName}}Query) ProcessResults(br pgx.BatchResults) error {
-	q.results = &{{lowerTitle .MethodName}}BatchResults{br, len(q.args), false}
-	return nil
-}
-
-func New{{.MethodName}}Query(ex QueryExecutor) *{{lowerTitle .MethodName}}Query {
-	return &{{lowerTitle .MethodName}}Query{ex: ex}
+func (q {{lowerTitle .MethodName}}Query) Do(ctx context.Context, db DBTX) (*{{lowerTitle .MethodName}}BatchResults, error) {
+	batch := &pgx.Batch{}
+	for _, a := range q.args {
+		vals := []any{
+		{{- if .Arg.Struct }}
+		{{- range .Arg.Struct.Fields }}
+			a.{{.Name}},
+		{{- end }}
+		{{- else }}
+			a,
+		{{- end }}
+		}
+		batch.Queue({{.ConstantName}}, vals...)
+	}
+	br := db.SendBatch(ctx, batch)
+	return &{{lowerTitle .MethodName}}BatchResults{br, len(q.args), false}, nil
 }
 
 {{range .Comments}}//{{.}}
 {{end -}}
-func (q *{{lowerTitle .MethodName}}Query) Eval(ctx context.Context, {{.Arg.SlicePair}}) (*{{lowerTitle .MethodName}}BatchResults, error) {
-	q.args = {{.Arg.Name}}
-	if err := q.ex.Execute(ctx, q); err != nil {
-		return nil, err
-	}
-	return q.results, nil
+func {{.MethodName}}({{.Arg.SlicePair}}) Query[*{{lowerTitle .MethodName}}BatchResults] {
+	return {{lowerTitle .MethodName}}Query{args: {{.Arg.Name}}}
 }
 
 {{if eq .Cmd ":batchexec"}}

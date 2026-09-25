@@ -42,6 +42,7 @@ temp/
 # Environment files
 .env
 .env.local
+.envrc
 
 # Documentation build artifacts
 docs/_build/

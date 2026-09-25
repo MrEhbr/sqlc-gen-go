@@ -1,6 +1,6 @@
 module github.com/sqlc-dev/sqlc-gen-go/examples/pgx-v4
 
-go 1.24.0
+go 1.27.0
 
 require (
 	github.com/jackc/pgconn v1.14.3

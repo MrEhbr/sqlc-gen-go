@@ -52,3 +52,6 @@ SELECT sqlc.embed(posts), sqlc.embed(users)
 FROM posts
 JOIN users ON users.id = posts.author_id
 ORDER BY posts.created_at DESC;
+
+-- name: ListUsersByIDs :many
+SELECT * FROM users WHERE id = ANY($1::bigint[]) ORDER BY id;

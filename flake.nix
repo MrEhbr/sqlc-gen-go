@@ -16,7 +16,7 @@
       devShells = forEachSupportedSystem ({ pkgs }: {
         default = pkgs.mkShell {
           packages = with pkgs; [
-            go
+            go_1_27
             sqlc
             gotools
             golangci-lint

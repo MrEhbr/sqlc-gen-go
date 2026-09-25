@@ -60,7 +60,7 @@ func (v QueryValue) Pairs() []Argument {
 	}
 	if !v.EmitStruct() && v.IsStruct() {
 		var out []Argument
-		for _, f := range v.Struct.Fields {
+		for _, f := range v.UniqueFields() {
 			out = append(out, Argument{
 				Name: escape(toLowerCase(f.Name)),
 				Type: f.Type,
@@ -270,6 +270,8 @@ type Query struct {
 	Arg          QueryValue
 	// Used for :copyfrom
 	Table *plugin.Identifier
+	// Shared pgx row scanner for struct results; empty for scalar results.
+	ScannerName string
 }
 
 func (q Query) hasRetType() bool {
