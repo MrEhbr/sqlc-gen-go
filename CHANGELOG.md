@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [1.0.0](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.3.2..v1.0.0) - 2026-09-25
+
+### Features
+
+-  [**breaking**]generate typed Query[T] values for all drivers - ([a4c83ed](https://github.com/MrEhbr/sqlc-gen-go/commit/a4c83ed4dcfcbed05dbea09d9872ecd5a21d8c93)) - Aleksei Burmistrov
+
+---
 ## [0.3.2](https://github.com/MrEhbr/sqlc-gen-go/compare/v0.3.1..v0.3.2) - 2026-05-15
 
 ### Bug Fixes
